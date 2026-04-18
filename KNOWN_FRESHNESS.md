@@ -23,6 +23,18 @@ These are parts of the curriculum that rely on specific UI elements or behaviors
 
 (This list grows as new chapters are added.)
 
+## Environment notes
+
+### Worktree-mode Claude Code sessions
+
+Some Claude Code setups run sessions inside a git **worktree** (a secondary folder linked to the same repo). You can tell this is happening if the session's working directory path includes `.claude/worktrees/...`.
+
+In a worktree, `main` is already checked out by the primary folder, so the worktree itself always runs on its own branch. This means the chapters' "confirm I'm on main" instruction won't match `git status` literally — you'll see a feature branch name or a detached HEAD instead.
+
+**This is not drift — the chapters are correct for a standard single-folder setup.** The functional equivalent in worktree mode is being **at the tip of `origin/main` with a clean working tree** (same commit, same content, different git label).
+
+If a student hits this, Claude Code should acknowledge the worktree constraint, confirm the state is equivalent, and proceed without rewriting the chapter.
+
 ## If you're using this curriculum more than 3 months after the date above
 
 Ask Claude Code, at the start of your session:

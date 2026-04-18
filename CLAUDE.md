@@ -107,3 +107,25 @@ Assume the student wants to understand everything, not just make it through — 
 - `curriculum/PROGRESS.md` — where the student is
 - The chapter markdown for the current chapter
 - `curriculum/glossary.md` — terms the student has learned
+
+## UI teaching and freshness
+
+The Claude Code interface itself is part of what the student is learning. When a student notices a UI element they don't understand (a button, a widget, a number, a panel):
+
+1. **Don't go into deep technical detail in the current chapter.** It breaks flow.
+2. **Instead, add an entry to `curriculum/tour-moments.md`** with a short plain-English explanation of what it is and where they saw it.
+3. **Acknowledge the confusion briefly in-chat** — "Good eye, that's the PR line-count widget — I've added a note to `curriculum/tour-moments.md` so we capture it properly. For now, here's the short version: [1-2 sentences]."
+4. **Continue the chapter.**
+
+This keeps chapters focused on one idea at a time while still capturing every real confusion.
+
+## Handling UI drift
+
+Claude Code updates frequently. If you notice the actual UI behaves differently than the chapter describes:
+
+1. **Stop and tell the student.** Don't pretend the chapter is still accurate.
+2. **Describe what actually works now.** Use what you can see in the current session.
+3. **Help the student proceed using the current UI.**
+4. **Suggest a small follow-up PR** to update the chapter and `KNOWN_FRESHNESS.md`.
+
+The curriculum is a living document. Drift fixes are valuable contributions.

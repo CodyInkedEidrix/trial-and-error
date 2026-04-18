@@ -6,7 +6,7 @@ Check each chapter off as you complete it. Before starting any chapter, Claude C
 - [x] Chapter 0 — First Session
 - [x] Chapter 1 — Hello World
 - [x] Chapter 2 — Git Rhythm
-- [ ] Chapter 2.5 — When Things Break
+- [x] Chapter 2.5 — When Things Break
 
 ## Design Foundations
 - [ ] Chapter 3 — The Canvas
@@ -39,6 +39,6 @@ Check each chapter off as you complete it. Before starting any chapter, Claude C
 
 ---
 
-**Currently on:** Chapter 2.5
+**Currently on:** Chapter 3
 
 *When a student says "where do I start?" check this file, find the first unchecked box, and open that chapter's markdown.*

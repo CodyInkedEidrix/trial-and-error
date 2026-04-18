@@ -24,5 +24,9 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
-# Claude Code session state — per-machine, not part of the project
-.claude/
+# Claude Code session state — per-machine, not part of the project.
+# Exception: .claude/skills/ holds vendored skills that ARE part of the
+# project and need to be tracked.
+.claude/*
+!.claude/skills/
+!.claude/skills/**

@@ -1,0 +1,46 @@
+/* ============================================================
+   Eidrix Design Tokens
+   Single source of truth for colors, typography, and surface
+   values used across the app. Reference these via var(--name)
+   or via the Tailwind class aliases configured in
+   tailwind.config.js.
+   ============================================================ */
+
+:root {
+  /* ----- Obsidian palette -----
+     Warm dark backgrounds. 950 is the deepest; 700 is for
+     slightly elevated surfaces (cards, modals) later on. */
+  --obsidian-950: #0b0a08;
+  --obsidian-900: #141310;
+  --obsidian-800: #1e1a15;
+  --obsidian-700: #2a241d;
+
+  /* ----- Ember palette -----
+     Burnt-orange accents. 500 is the signature color;
+     900 is smoldering deep, 300 is soft warm highlight. */
+  --ember-900: #6b2d00;
+  --ember-700: #b24d00;
+  --ember-500: #ff6b1a;
+  --ember-300: #ffab7a;
+
+  /* ----- Text palette -----
+     Warm off-whites and muted grays — never pure white,
+     never pure gray. Pure colors on a warm background read
+     as mismatched. */
+  --text-primary: #f5efe6;
+  --text-secondary: #a89f91;
+  --text-tertiary: #6b6459;
+
+  /* ----- Cobalt accent -----
+     A single cool-blue for accents that need to pop against
+     the warm palette. Use sparingly — its job is to startle. */
+  --cobalt-500: #3b82f6;
+
+  /* ----- Typography -----
+     Font stacks with system fallbacks. If the web font
+     hasn't loaded yet, the browser falls through to
+     system-ui / ui-monospace. */
+  --font-display: 'Space Grotesk', system-ui, -apple-system, sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Menlo', monospace;
+}

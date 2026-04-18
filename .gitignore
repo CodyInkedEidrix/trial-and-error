@@ -1,0 +1,25 @@
+# Dependencies — huge, auto-generated folder. Don't commit this.
+node_modules
+
+# Build output
+dist
+dist-ssr
+*.local
+
+# Editor junk
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store
+*.sw?
+
+# Secrets
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log

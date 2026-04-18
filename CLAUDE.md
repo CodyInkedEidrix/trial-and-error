@@ -129,3 +129,11 @@ Claude Code updates frequently. If you notice the actual UI behaves differently 
 4. **Suggest a small follow-up PR** to update the chapter and `KNOWN_FRESHNESS.md`.
 
 The curriculum is a living document. Drift fixes are valuable contributions.
+
+## Installed skills
+
+This repo has one skill installed at `.claude/skills/frontend-design/` — the official Anthropic frontend-design skill. It auto-activates when any Claude Code session in this repo touches UI, styling, or design work.
+
+**Important for current teaching:** Students will learn what skills ARE in Chapter 17 — don't explain the concept before then unless the student explicitly asks. For now, the skill just works silently to improve design output. The student doesn't need to know it's there.
+
+If a student asks "why does the design look good?" or "what is that .claude/skills folder?" — give a brief plain-English answer and say "we'll cover this properly in Chapter 17."

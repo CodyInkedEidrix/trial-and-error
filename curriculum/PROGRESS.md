@@ -3,8 +3,8 @@
 Check each chapter off as you complete it. Before starting any chapter, Claude Code should read that chapter's markdown file in `curriculum/`.
 
 ## Foundation
-- [ ] Chapter 0 — First Session
-- [ ] Chapter 1 — Hello World
+- [x] Chapter 0 — First Session
+- [x] Chapter 1 — Hello World
 - [ ] Chapter 2 — Git Rhythm
 - [ ] Chapter 2.5 — When Things Break
 
@@ -39,6 +39,6 @@ Check each chapter off as you complete it. Before starting any chapter, Claude C
 
 ---
 
-**Currently on:** Chapter 0
+**Currently on:** Chapter 2
 
 *When a student says "where do I start?" check this file, find the first unchecked box, and open that chapter's markdown.*

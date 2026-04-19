@@ -28,6 +28,22 @@ Future chapters in this folder might cover:
 
 - **[TC-01 — Plan Mode & Thorough Planning](tc-01-plan-mode.md)** — Three levels of planning (quick / standard / thorough) and when to reach for each. Foundation skill that makes every other chapter cleaner. ~45 min.
 
+## Planned chapters
+
+Chapters scheduled in the [locked execution order](../CURRICULUM_DESIGN.md) but not yet written. Research notes for each accumulate here as we encounter relevant material.
+
+### TC-09 — Skills Discovery & Curation *(not yet written)*
+
+Tour of the most powerful skills in the ecosystem. Learn to evaluate viral skills critically — extract principles, don't blindly install.
+
+**Research notes for when this chapter gets written:**
+
+- **Case study: `forrestchang/andrej-karpathy-skills`** (30k+ GitHub stars, viral early 2026). A single CLAUDE.md file encoding four Karpathy principles: (1) surface assumptions don't bury them, (2) don't overengineer/YAGNI, (3) touch only what the task requires, (4) goal-driven execution with verification loops. Good example of "viral skill worth studying but not necessarily installing." Our existing CLAUDE.md already covers ~80% of it. Teaching angle: how to read a viral skill critically, extract the 2-3 ideas worth stealing, and incorporate them into your own system instead of installing everything.
+
+- **Philosophy to teach:** A junior student sees "30k stars" and installs. A power user extracts principles. TC-09's job is to build that second instinct.
+
+- **Other skills to evaluate in this chapter:** Will grow as we encounter interesting ones during the curriculum.
+
 ## Adding a new Tool Capability chapter
 
 When you (or a future student) wants a chapter that doesn't exist:

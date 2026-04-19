@@ -41,7 +41,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 *À la carte chapters that level up your Claude Code skills. Do these in any order, when curious or stuck. See [tool-capabilities/INDEX.md](tool-capabilities/INDEX.md) for context.*
 
-- [ ] TC-01 — Plan Mode & Thorough Planning
+- [x] TC-01 — Plan Mode & Thorough Planning
 - [ ] TC-02 — Web Search & Research
 - [ ] TC-03 — Image Analysis & Screenshots
 - [ ] TC-04 — Reading Other People's Code (Ch 7 helpful)
@@ -75,6 +75,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** TC-01 — Plan Mode & Thorough Planning
+**Currently on:** Chapter 7 — Reading Code
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

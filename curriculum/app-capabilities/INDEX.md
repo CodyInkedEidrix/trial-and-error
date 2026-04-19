@@ -1,0 +1,42 @@
+# App Capabilities
+
+This folder contains chapters that teach **reusable app features** — patterns and integrations you can drop into any project, not just the Trial and Error app. Each chapter walks through one feature end-to-end: what it is, when to use it, and how to actually build it.
+
+## How to use this folder
+
+These chapters are **à la carte**. Unlike the Main Track (which builds the Eidrix-style app in a fixed order), App Capabilities can be done whenever you need the feature. Pick one when:
+
+- You're building (or want to build) something that needs the feature
+- You want to understand a common pattern before you encounter it in real work
+- You're scoping out an app idea and want to know what's involved
+
+The Main Track teaches you to build *the* app. App Capabilities teach you to build *any* app.
+
+## What might live here
+
+Future chapters in this folder might cover:
+
+- User authentication (sign-in, sign-up, sessions)
+- Payments (Stripe checkout, subscriptions, webhooks)
+- File uploads and storage
+- Email sending (transactional, marketing)
+- Full-text search
+- Real-time updates (websockets, server-sent events)
+- Image processing and CDN delivery
+- Analytics and event tracking
+- Background jobs and queues
+- Webhooks (sending and receiving)
+
+## Current chapters
+
+(none yet — this is the scaffold. Chapters get added here as they're written.)
+
+## Adding a new App Capability chapter
+
+When you (or a future student) wants a chapter that doesn't exist:
+
+1. Ask Claude Code to draft one as a small PR.
+2. The chapter follows the same structural rhythm as Main Track chapters (intro, what you're learning, what you're building, glossary, step-by-step, success criteria, troubleshooting).
+3. It lives at `curriculum/app-capabilities/<short-slug>.md`.
+4. Add an entry to the "Current chapters" list above.
+5. Add an entry to the App Capabilities section in `PROGRESS.md`.

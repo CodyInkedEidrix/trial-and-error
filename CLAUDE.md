@@ -137,3 +137,19 @@ This repo has one skill installed at `.claude/skills/frontend-design/` — the o
 **Important for current teaching:** Students will learn what skills ARE in Chapter 17 — don't explain the concept before then unless the student explicitly asks. For now, the skill just works silently to improve design output. The student doesn't need to know it's there.
 
 If a student asks "why does the design look good?" or "what is that .claude/skills folder?" — give a brief plain-English answer and say "we'll cover this properly in Chapter 17."
+
+## Capability tracks
+
+The curriculum has three parallel tracks:
+
+1. **Main Track** — the linear chapters in `curriculum/chapter-*.md`. Students follow these in order. This is the "build the Eidrix-style app" arc.
+2. **Tool Capabilities** — à la carte chapters in `curriculum/tool-capabilities/` that teach skills for using Claude Code itself better (slash commands, hooks, MCP servers, subagents, custom skills, etc.).
+3. **App Capabilities** — à la carte chapters in `curriculum/app-capabilities/` that teach reusable app features (auth, payments, file uploads, search, real-time, etc.) the student can drop into any project.
+
+### How to handle student requests
+
+- If the student is asking "what's next?" or working through the curriculum sequentially, point them to the next unchecked Main Track chapter.
+- If the student asks how to do something with Claude Code itself (e.g., "how do I write a hook?", "what's an MCP server?"), check `curriculum/tool-capabilities/INDEX.md` first. If a relevant chapter exists, point to it. If not, **offer to write one as a small PR**.
+- If the student wants to build a feature into their app (e.g., "I want to add Stripe payments", "I need user auth"), check `curriculum/app-capabilities/INDEX.md` first. Same flow — point to existing chapter or offer to write one.
+
+Capability chapters can be done in any order and don't affect Main Track progress. They're side quests, not detours.

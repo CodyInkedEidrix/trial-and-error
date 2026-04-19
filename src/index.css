@@ -4,11 +4,11 @@
 @tailwind components;
 @tailwind utilities;
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+/* Tailwind's preflight (injected by @tailwind base above) already
+   normalizes margin, padding, and box-sizing. A custom universal
+   reset here would run AFTER utilities and silently override every
+   Tailwind spacing class — that's what broke Chapter 4's layout.
+   Don't add one back without good reason. */
 
 html,
 body,

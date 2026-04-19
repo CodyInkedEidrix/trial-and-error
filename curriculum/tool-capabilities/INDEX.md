@@ -26,7 +26,7 @@ Future chapters in this folder might cover:
 
 ## Current chapters
 
-(none yet — this is the scaffold. Chapters get added here as they're written.)
+- **[TC-01 — Plan Mode & Thorough Planning](tc-01-plan-mode.md)** — Three levels of planning (quick / standard / thorough) and when to reach for each. Foundation skill that makes every other chapter cleaner. ~45 min.
 
 ## Adding a new Tool Capability chapter
 

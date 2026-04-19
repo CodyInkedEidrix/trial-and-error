@@ -1,13 +1,11 @@
-import Header from './components/Header'
-import TypographyLab from './components/TypographyLab'
-import ColorLab from './components/ColorLab'
+import ChatColumn from './components/ChatColumn'
+import TabsPanel from './components/TabsPanel'
 
 export default function App() {
   return (
-    <>
-      <Header />
-      <TypographyLab />
-      <ColorLab />
-    </>
+    <div className="flex h-screen overflow-hidden">
+      <ChatColumn />
+      <TabsPanel />
+    </div>
   )
 }

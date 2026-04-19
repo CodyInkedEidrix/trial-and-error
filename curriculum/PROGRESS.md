@@ -18,7 +18,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ### Phase 2 — Range and Polish
 - [x] Chapter 7 — Reading Code
-- [ ] Chapter 8 — Components Tab
+- [x] Chapter 8 — Components Tab
 - [ ] Chapter 9 — Motion Lab
 - [ ] Chapter 10 — Fake Data & Forms
 - [ ] Chapter 11 — Fake Chat UI
@@ -75,6 +75,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** Chapter 8 — Components Tab
+**Currently on:** AC-06 — Command Palette (cmd+K)
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

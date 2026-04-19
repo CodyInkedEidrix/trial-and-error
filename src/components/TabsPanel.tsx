@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import TypographyLab from './TypographyLab'
 import ColorLab from './ColorLab'
+import ComponentsTab from './ComponentsTab'
 
-type TabId = 'lab' | 'records' | 'chat' | 'settings'
+type TabId = 'lab' | 'components' | 'records' | 'chat' | 'settings'
 
 const tabs: { id: TabId; label: string }[] = [
   { id: 'lab', label: 'Lab' },
+  { id: 'components', label: 'Components' },
   { id: 'records', label: 'Records' },
   { id: 'chat', label: 'Chat' },
   { id: 'settings', label: 'Settings' },
@@ -94,7 +96,10 @@ export default function TabsPanel() {
             <ColorLab />
           </>
         )}
-        {activeTab !== 'lab' && <ComingSoon label={activeLabel} />}
+        {activeTab === 'components' && <ComponentsTab />}
+        {activeTab !== 'lab' && activeTab !== 'components' && (
+          <ComingSoon label={activeLabel} />
+        )}
       </div>
     </main>
   )

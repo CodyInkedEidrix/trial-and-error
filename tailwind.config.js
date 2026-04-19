@@ -21,6 +21,15 @@ export default {
           secondary: 'var(--text-secondary)',
           tertiary: 'var(--text-tertiary)',
         },
+        danger: {
+          500: 'var(--danger-500)',
+        },
+        success: {
+          500: 'var(--success-500)',
+        },
+        cobalt: {
+          500: 'var(--cobalt-500)',
+        },
       },
       fontFamily: {
         display: ['Space Grotesk', 'system-ui', 'sans-serif'],

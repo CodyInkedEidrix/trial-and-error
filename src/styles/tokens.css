@@ -36,6 +36,13 @@
      the warm palette. Use sparingly — its job is to startle. */
   --cobalt-500: #3b82f6;
 
+  /* ----- Semantic colors -----
+     Single shades for "danger" (destructive actions, errors)
+     and "success" (positive status). Picked to read clearly
+     against the warm obsidian background without clashing. */
+  --danger-500: #e5484d;
+  --success-500: #4cc38a;
+
   /* ----- Typography -----
      Font stacks with system fallbacks. If the web font
      hasn't loaded yet, the browser falls through to

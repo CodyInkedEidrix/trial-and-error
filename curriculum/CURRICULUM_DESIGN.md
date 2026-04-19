@@ -115,7 +115,7 @@ Stars mark the biggest "milestone" moments.
 9. TC-01 Plan Mode
 10. Chapter 7 — Reading Code
 11. TC-04 Reading Other People's Code
-12. Chapter 8 — Components Lab
+12. Chapter 8 — Components Tab
 13. AC-06 Command Palette
 14. AC-07 Keyboard Shortcuts
 15. AC-14 Toast Notifications

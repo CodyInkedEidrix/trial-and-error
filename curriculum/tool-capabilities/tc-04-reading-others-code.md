@@ -55,11 +55,13 @@ After those five, you have a rough mental map. Now you can read individual files
 
 You're going to clone a well-known open-source React project — something small enough to feel approachable, big enough to feel real. Then you'll run the 5-question scan, answer a few "where does X live" questions, and wrap up without changing a line of code.
 
-The specific repo we'll use: **`vercel/next.js` examples — the `with-tailwindcss` starter.** Small, well-organized, real production code, no weird exotic patterns.
+The specific repo we'll use: **`vercel/next.js` examples — the `blog-starter` example.** Small, well-organized, real production code, no weird exotic patterns. Uses the modern App Router (`src/app/`), Tailwind, and TypeScript.
 
-The repo lives at: `github.com/vercel/next.js/tree/canary/examples/with-tailwindcss`
+The repo lives at: `github.com/vercel/next.js/tree/canary/examples/blog-starter`
 
 For this chapter you'll only clone a small piece — the example folder — not the entire Next.js monorepo. Keeps things tight.
+
+**Heads-up:** the Next.js team rotates their examples folder pretty often. If `blog-starter` doesn't exist anymore by the time you read this, browse `github.com/vercel/next.js/tree/canary/examples/` and pick any small Tailwind-using example. The 5-question scan works on any Next.js codebase — the lesson isn't the specific repo.
 
 ---
 
@@ -88,9 +90,9 @@ Claude Code will either create it or confirm it exists. Either is fine.
 ## Step 3 — Clone the practice repo
 
 ```
-Inside the scratch directory, do a shallow clone of just the with-tailwindcss Next.js example. The easiest way is to clone the whole next.js repo shallow (depth 1) and then navigate to the examples/with-tailwindcss folder — we don't need the rest.
+Inside the scratch directory, do a shallow clone of just the blog-starter Next.js example. The easiest way is to clone the whole next.js repo shallow (depth 1) and then navigate to the examples/blog-starter folder — we don't need the rest.
 
-Actually, faster approach: use git sparse-checkout to grab ONLY the examples/with-tailwindcss folder. Set that up. If sparse-checkout is finicky, fall back to the full shallow clone and just cd into the examples folder.
+Actually, faster approach: use git sparse-checkout to grab ONLY the examples/blog-starter folder. Set that up. If sparse-checkout is finicky, fall back to the full shallow clone and just cd into the examples folder.
 
 Once done, confirm we have a working copy of the example and show me the folder structure.
 ```
@@ -104,12 +106,12 @@ When this finishes, you should see a folder containing a small Next.js + Tailwin
 This is the core of the chapter. Ask Claude Code to answer the five questions for you.
 
 ```
-We just cloned the `with-tailwindcss` Next.js example. Don't read any code yet — walk through the 5-question scan for this codebase:
+We just cloned the `blog-starter` Next.js example. Don't read any code yet — walk through the 5-question scan for this codebase:
 
 1. **What is this project?** Read the README (if any) and package.json's description/name. Tell me what this project IS in one sentence.
 2. **What tech stack does it use?** Read package.json's dependencies and devDependencies. Give me the top 5 most important ones and what each does.
-3. **Where does it start?** Find the entry point — for Next.js this is usually `pages/_app.tsx` or `app/layout.tsx`. Tell me which one this project uses and why it matters.
-4. **How is the code organized?** Describe the folder structure at a high level — what goes in `pages/` vs `components/` vs `public/` vs `styles/`.
+3. **Where does it start?** Find the entry point — for modern Next.js (App Router) this is `app/layout.tsx`, sometimes wrapped under `src/app/layout.tsx`. Tell me where this project's entry point lives and why it matters.
+4. **How is the code organized?** Describe the folder structure at a high level — where pages live (`app/` or `src/app/`), where components live, where public assets and styles live.
 5. **What's the convention?** Pick ONE component file and describe: what's it named, where does it live, how is it styled, what does it export?
 
 Keep each answer under 3 sentences. I want the mental-map version, not the deep dive.
@@ -230,8 +232,9 @@ You'll make better restructuring decisions because you'll have the full mental m
 
 ## If something broke
 
-- **"Git sparse-checkout didn't work"** — Fall back to shallow clone of the full repo: `git clone --depth 1 https://github.com/vercel/next.js` then cd into `examples/with-tailwindcss`. Delete the rest if it bugs you.
+- **"Git sparse-checkout didn't work"** — Fall back to shallow clone of the full repo: `git clone --depth 1 https://github.com/vercel/next.js` then cd into `examples/blog-starter`. Delete the rest if it bugs you.
 - **"The example repo looks different from what the chapter describes"** — Next.js examples update over time. The concepts are still valid. Tell Claude Code: *"The specific files in this example have changed since the chapter was written. Adapt the 5-question scan to what's actually here."*
+- **"`blog-starter` doesn't exist in the examples folder anymore"** — The Next.js team rotates examples. Browse `github.com/vercel/next.js/tree/canary/examples/`, pick any small Tailwind-using example, and run the 5-question scan on that instead. The repo is just a vehicle — the lesson is the scan.
 - **"I'm overwhelmed by how different Next.js is from my Trial and Error setup"** — That's normal. Next.js uses different conventions than Vite. Tell Claude Code: *"Explain the big conceptual differences between this Next.js example and my Vite/React setup, in plain English."*
 - **"I can't tell if my mental map is right"** — Test it. Pick a random task like "add a new page called /about" and ask Claude Code to describe how you'd do it. If your guess matches Claude Code's approach, your map is solid.
 

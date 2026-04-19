@@ -23,6 +23,12 @@ These are parts of the curriculum that rely on specific UI elements or behaviors
 
 (This list grows as new chapters are added.)
 
+## External-repo references
+
+Chapters that depend on a specific file or folder in someone else's repo. If the upstream repo restructures, these may need updating:
+
+- **TC-04 — Reading Other People's Code:** uses `vercel/next.js` example `blog-starter` as the practice codebase. Originally pointed to `with-tailwindcss` (verified gone April 2026). If `blog-starter` also disappears, the chapter has a built-in fallback: pick any small Tailwind-using example from `github.com/vercel/next.js/tree/canary/examples/`.
+
 ## Environment notes
 
 ### Worktree-mode Claude Code sessions

@@ -27,6 +27,7 @@ Future chapters in this folder might cover:
 ## Current chapters
 
 - **[TC-01 — Plan Mode & Thorough Planning](tc-01-plan-mode.md)** — Three levels of planning (quick / standard / thorough) and when to reach for each. Foundation skill that makes every other chapter cleaner. ~45 min.
+- **[TC-04 — Reading Other People's Code](tc-04-reading-others-code.md)** — The 5-question scan for opening any unfamiliar codebase fast. Practice on a real open-source repo. ~60 min.
 
 ## Planned chapters
 

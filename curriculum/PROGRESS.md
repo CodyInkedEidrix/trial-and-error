@@ -44,7 +44,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 - [x] TC-01 — Plan Mode & Thorough Planning
 - [ ] TC-02 — Web Search & Research
 - [ ] TC-03 — Image Analysis & Screenshots
-- [ ] TC-04 — Reading Other People's Code (Ch 7 helpful)
+- [x] TC-04 — Reading Other People's Code (Ch 7 helpful)
 - [ ] TC-05 — Git Surgery (requires Ch 2.5)
 - [ ] TC-06 — Subagents (Claude Code's) (requires TC-01)
 - [ ] TC-07 — Writing Custom Skills (requires Ch 16)
@@ -75,6 +75,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** TC-04 — Reading Other People's Code *(or Chapter 8 — Components Lab if skipping the side quest)*
+**Currently on:** Chapter 8 — Components Lab
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

@@ -138,6 +138,10 @@ This repo has one skill installed at `.claude/skills/frontend-design/` — the o
 
 If a student asks "why does the design look good?" or "what is that .claude/skills folder?" — give a brief plain-English answer and say "we'll cover this properly in Chapter 17."
 
+A second skill is installed at `.claude/skills/code-simplifier/` — Anthropic's official **code-simplifier** agent (vendored from `github.com/anthropics/claude-plugins-official` under Apache 2.0). It auto-activates after substantive code changes and runs a quality/simplification pass — preserves functionality, improves clarity, removes redundant complexity, applies project conventions. Vendored from an agent file (renamed `agents/code-simplifier.md` → `SKILL.md`) so Claude Code's skill discovery picks it up.
+
+**Important for current teaching:** Students officially learn about code-simplifier (and skills more broadly) in **TC-09 — Skills Discovery & Curation**. Don't pre-explain unless asked. If a student notices code being cleaned up after they wrote it, give a brief plain-English answer ("there's a skill installed that auto-tidies code after changes") and say "we'll cover skills properly in TC-09."
+
 ## Capability tracks
 
 The curriculum has three parallel tracks:

@@ -17,7 +17,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 - [x] Chapter 6 — The Eidrix Shell
 
 ### Phase 2 — Range and Polish
-- [ ] Chapter 7 — Reading Code
+- [x] Chapter 7 — Reading Code
 - [ ] Chapter 8 — Components Lab
 - [ ] Chapter 9 — Motion Lab
 - [ ] Chapter 10 — Fake Data & Forms
@@ -75,6 +75,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** Chapter 7 — Reading Code
+**Currently on:** TC-04 — Reading Other People's Code *(or Chapter 8 — Components Lab if skipping the side quest)*
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

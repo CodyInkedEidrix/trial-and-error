@@ -14,7 +14,7 @@ Check each chapter off as you complete it. Before starting any chapter, Claude C
 - [x] Chapter 5 — Color Section
 
 ## The Eidrix Shape
-- [ ] Chapter 6 — The Eidrix Shell
+- [x] Chapter 6 — The Eidrix Shell
 - [ ] Chapter 6.5 — Deploy It
 - [ ] Chapter 7 — Reading Code
 
@@ -39,6 +39,6 @@ Check each chapter off as you complete it. Before starting any chapter, Claude C
 
 ---
 
-**Currently on:** Chapter 6
+**Currently on:** Chapter 6.5
 
 *When a student says "where do I start?" check this file, find the first unchecked box, and open that chapter's markdown.*

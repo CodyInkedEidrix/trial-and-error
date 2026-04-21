@@ -11,6 +11,7 @@ import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type {
   BlinkConfig,
   BreathConfig,
+  CursorTrackingConfig,
   EyeConfig,
   EyeState,
   LookAroundConfig,
@@ -179,6 +180,7 @@ interface LookAroundResult {
 function useLookAround(
   state: EyeState,
   config: LookAroundConfig,
+  cursorConfig: CursorTrackingConfig,
   reduced: boolean,
   size: number,
   svgRef: RefObject<SVGSVGElement | null>
@@ -188,8 +190,12 @@ function useLookAround(
   // Size-proportional spring tuning — smaller Eyes get stiffer springs
   // so the iris catches up fast enough to read at tiny scale, but the
   // tuning scales smoothly rather than a binary switch so intermediate
-  // sizes (40px, 48px) don't overshoot.
-  const stiffnessMult = Math.max(1, Math.min(1.8, 48 / size))
+  // sizes (40px, 48px) don't overshoot. Stiffness ceiling comes from
+  // config so the playground can tune it.
+  const stiffnessMult = Math.max(
+    1,
+    Math.min(cursorConfig.smallSizeStiffnessCeiling, 48 / size)
+  )
   const dampingReduction = size < 64 ? 2 : 4
   const springStiff = config.springStiffness * stiffnessMult
   const springDamp = Math.max(8, config.springDamping - dampingReduction)
@@ -214,17 +220,22 @@ function useLookAround(
 
     let cancelled = false
     const timers: number[] = []
-    // Size-proportional amplification. At 24px the iris is ~4 rendered
-    // pixels so we need 2.5× to make tracking visible; at 40px we only
-    // need 1.6×; at 64px+ we need none. Smooth scaling prevents the
-    // over-tracking that happens with a binary small/large switch.
-    const sizeAmp = Math.max(1, Math.min(2.5, 64 / size))
+    // Size-proportional amplification. Ceiling from config so the
+    // playground can tune how aggressively small Eyes compensate for
+    // sub-pixel motion.
+    const sizeAmp = Math.max(
+      1,
+      Math.min(cursorConfig.smallSizeAmpCeiling, 64 / size)
+    )
     const maxOffset = config.maxDistance * sizeAmp
-    // Cursor pixel range scales with Eye size — smaller Eyes in corners
-    // need full tilt from nearby cursor positions.
-    const cursorRange = Math.max(200, Math.min(400, size * 6))
+    // Cursor pixel range — floor 200, ceiling from config, scales
+    // linearly with size in between.
+    const cursorRange = Math.max(
+      200,
+      Math.min(cursorConfig.cursorRange, size * 6)
+    )
     // Idle timeout — cursor still for this long = fall back to idle drift
-    const idleThreshold = 2500
+    const idleThreshold = cursorConfig.idleThreshold
 
     // Start lastMoveTime "fresh" so we don't trigger idle drift
     // immediately on mount
@@ -259,8 +270,12 @@ function useLookAround(
       lastMoveTime = 0 // force idle drift to kick in quickly
     }
 
-    window.addEventListener('mousemove', handleMouseMove)
-    document.addEventListener('mouseleave', handleMouseLeave)
+    // Gate on cursorTracking.enabled — if disabled, no listeners, iris
+    // still runs idle drift based on state-level timing.
+    if (cursorConfig.enabled) {
+      window.addEventListener('mousemove', handleMouseMove)
+      document.addEventListener('mouseleave', handleMouseLeave)
+    }
 
     // Idle drift loop — only runs in 'idle' state. In 'speaking', the
     // iris simply rests at wherever the cursor last directed it.
@@ -305,11 +320,22 @@ function useLookAround(
 
     return () => {
       cancelled = true
-      window.removeEventListener('mousemove', handleMouseMove)
-      document.removeEventListener('mouseleave', handleMouseLeave)
+      if (cursorConfig.enabled) {
+        window.removeEventListener('mousemove', handleMouseMove)
+        document.removeEventListener('mouseleave', handleMouseLeave)
+      }
       timers.forEach((t) => clearTimeout(t))
     }
-  }, [state, config, reduced, size, svgRef, targetX, targetY])
+  }, [
+    state,
+    config,
+    cursorConfig,
+    reduced,
+    size,
+    svgRef,
+    targetX,
+    targetY,
+  ])
 
   return { irisX, irisY }
 }
@@ -779,6 +805,7 @@ export function useEyeAnimations(
   const { irisX: lookX, irisY: lookY } = useLookAround(
     state,
     config.lookAround,
+    config.cursorTracking,
     reduced,
     size,
     svgRef

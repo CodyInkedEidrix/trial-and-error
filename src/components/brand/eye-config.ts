@@ -89,6 +89,19 @@ export interface MutedConfig {
   opacity: number
 }
 
+export interface CursorTrackingConfig {
+  /** Enable cursor-aware gaze. When false, only idle drift runs. */
+  enabled: boolean
+  /** Pixel distance from eye center at which tracking reaches full tilt. */
+  cursorRange: number
+  /** Ms of cursor stillness before idle drift takes over. */
+  idleThreshold: number
+  /** Amp factor ceiling at smallest sizes — compensates for sub-pixel motion. */
+  smallSizeAmpCeiling: number
+  /** Stiffness multiplier ceiling at smallest sizes. */
+  smallSizeStiffnessCeiling: number
+}
+
 export interface ReactionConfig {
   /** ms. null = indefinite, runs until state change or new reaction */
   duration: number | null
@@ -120,6 +133,7 @@ export interface EyeConfig {
   breath: BreathConfig
   blinks: BlinkConfig
   lookAround: LookAroundConfig
+  cursorTracking: CursorTrackingConfig
   states: {
     speaking: SpeakingPulseConfig
     thinking: ThinkingConfig
@@ -168,6 +182,13 @@ export const defaultConfig: EyeConfig = {
     springDamping: 14,
     holdDuration: 600,
     returnDelay: 200,
+  },
+  cursorTracking: {
+    enabled: true,
+    cursorRange: 400,
+    idleThreshold: 2500,
+    smallSizeAmpCeiling: 2.5,
+    smallSizeStiffnessCeiling: 1.8,
   },
   states: {
     speaking: {
@@ -239,6 +260,7 @@ export function mergeConfig(
       },
     },
     lookAround: { ...base.lookAround, ...override.lookAround },
+    cursorTracking: { ...base.cursorTracking, ...override.cursorTracking },
     states: {
       speaking: { ...base.states.speaking, ...override.states?.speaking },
       thinking: { ...base.states.thinking, ...override.states?.thinking },

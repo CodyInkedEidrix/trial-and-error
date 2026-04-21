@@ -21,6 +21,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 - [x] Chapter 8 — Components Tab
 - [x] Chapter 9 — Motion Lab
 - [ ] Chapter 10 — Fake Data & Forms
+- [ ] Chapter 10.5 — The Record-Detail Tab Pattern
 - [ ] Chapter 11 — Fake Chat UI
 - [ ] Chapter 12 — Deploy It ⭐
 

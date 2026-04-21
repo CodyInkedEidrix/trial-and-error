@@ -123,45 +123,46 @@ Stars mark the biggest "milestone" moments.
 16. AC-08a The Eidrix Eye ⭐
 17. AC-08b Eye Tuning Playground
 18. Chapter 10 — Fake Data & Forms
-19. AC-11 Optimistic UI & Loading States
-20. Chapter 11 — Fake Chat UI
-21. AC-07 Keyboard Shortcuts
-22. Chapter 12 — Deploy It ⭐
+19. Chapter 10.5 — The Record-Detail Tab Pattern
+20. AC-11 Optimistic UI & Loading States
+21. Chapter 11 — Fake Chat UI
+22. AC-07 Keyboard Shortcuts
+23. Chapter 12 — Deploy It ⭐
 
 ### Phase 3 — Going Real
 
-23. Chapter 13 — Environment Variables
-24. AC-01 Streaming Chat Foundation ⭐
-25. TC-02 Web Search
-26. TC-03 Image Analysis
-27. Chapter 14 — Supabase Foundation
-28. AC-02 Context-Aware Chat
-29. AC-03 Tool Calling ⭐⭐
-30. AC-17 Streaming UI Updates
-31. AC-04 Agent Memory & Persistence
-32. AC-05 Multi-Turn Agentic Loops
-33. AC-16 Agentic Subagents ⭐⭐⭐
+24. Chapter 13 — Environment Variables
+25. AC-01 Streaming Chat Foundation ⭐
+26. TC-02 Web Search
+27. TC-03 Image Analysis
+28. Chapter 14 — Supabase Foundation
+29. AC-02 Context-Aware Chat
+30. AC-03 Tool Calling ⭐⭐
+31. AC-17 Streaming UI Updates
+32. AC-04 Agent Memory & Persistence
+33. AC-05 Multi-Turn Agentic Loops
+34. AC-16 Agentic Subagents ⭐⭐⭐
 
 ### Phase 4 — Completion
 
-34. Chapter 15 — Files & Images
-35. AC-09 Drag-and-Drop File Uploads
-36. AC-10 Voice Input
-37. AC-12 Smart Search (à la carte)
-38. AC-13 Real-Time Presence (à la carte)
-39. AC-15 Magic Link (à la carte)
+35. Chapter 15 — Files & Images
+36. AC-09 Drag-and-Drop File Uploads
+37. AC-10 Voice Input
+38. AC-12 Smart Search (à la carte)
+39. AC-13 Real-Time Presence (à la carte)
+40. AC-15 Magic Link (à la carte)
 
 ### Phase 5 — Advanced
 
-40. Chapter 16 — Skills & Design System
-41. TC-07 Writing Custom Skills
-42. TC-09 Skills Discovery & Curation
-43. Chapter 17 — MCP Introduction
-44. Chapter 18 — Registry Pattern
-45. TC-05 Git Surgery (à la carte)
-46. TC-06 Subagents — Claude Code's (à la carte)
-47. TC-08 CLAUDE.md Mastery (à la carte)
-48. Chapter 19 — Graduation Project
+41. Chapter 16 — Skills & Design System
+42. TC-07 Writing Custom Skills
+43. TC-09 Skills Discovery & Curation
+44. Chapter 17 — MCP Introduction
+45. Chapter 18 — Registry Pattern
+46. TC-05 Git Surgery (à la carte)
+47. TC-06 Subagents — Claude Code's (à la carte)
+48. TC-08 CLAUDE.md Mastery (à la carte)
+49. Chapter 19 — Graduation Project
 
 ---
 
@@ -201,3 +202,4 @@ Either user finishes this and knows how to build.
 - **April 18, 2026** — Initial design doc. 19 Main Track chapters locked. 9 Tool Capabilities and 17 App Capabilities planned. Execution order defined with dependency respect.
 - **April 21, 2026** — Rescheduled AC-07 (Keyboard Shortcuts) from Phase 2 position #14 to #20. Reframed from "complete shortcut system for users who love them" to "invisible keyboard polish — the affordances users feel without noticing." New dependency on Ch 11 (Fake Chat UI) so the chapter lands with a chat input and more overlays to polish, not just a command palette.
 - **April 21, 2026** — Split AC-08 (Animated Brand Marks) into AC-08a (The Eidrix Eye — the signature component itself) and AC-08b (Eye Tuning Playground — live sliders and preset save/load). AC-08a keeps position #16 and the ⭐ signature marking; AC-08b inserts at new position #17. Every item from old #17 onward shifted +1 (31 items renumbered across Phases 2–5, total curriculum length 47 → 48).
+- **April 21, 2026** — Inserted Chapter 10.5 — The Record-Detail Tab Pattern at position 19 (right after Chapter 10, before AC-11). Short Main Track chapter (~90 min) that teaches the tab-based record-detail pattern used in real Eidrix — clicking a customer row opens them as a third-tier tab (Records → [Customer Name]), editable in place rather than in a slide-in panel. Same data, different UI pattern. Every item from old #19 onward shifted +1 (30 items renumbered across Phases 2–5, total curriculum length 48 → 49).

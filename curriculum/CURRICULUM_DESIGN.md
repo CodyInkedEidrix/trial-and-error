@@ -79,7 +79,7 @@ Students are free to skip à la carte items, but the prerequisites for each are 
 | AC-04 | Agent Memory & Persistence | AC-01, Ch 14 | Conversations remembered across sessions. |
 | AC-05 | Multi-Turn Agentic Loops | AC-03 | Plan → execute → reflect → execute again. Real autonomy. |
 | AC-06 | Command Palette (cmd+K) | Ch 8 | Linear/Raycast/Notion-style universal search and actions. |
-| AC-07 | Keyboard Shortcuts (for users) | Ch 8, AC-06 rec | Build a complete shortcut system for the users who love them. |
+| AC-07 | Keyboard Shortcuts | Ch 11, AC-06 rec | Invisible keyboard polish — Escape to close overlays, Cmd+Enter to submit, tab trapping in modals. The affordances users feel without noticing. |
 | AC-08 | Animated Brand Marks | Ch 9 | The Eidrix Eye-style signature animations. "Holy shit how" skill. |
 | AC-09 | Drag-and-Drop File Uploads | Ch 15 | With preview, progress, chunked uploads, error handling. |
 | AC-10 | Voice Input / Speech-to-Text | AC-03 rec | Contractor-with-dirty-hands feature. Real-world operator value. |
@@ -117,13 +117,13 @@ Stars mark the biggest "milestone" moments.
 11. TC-04 Reading Other People's Code
 12. Chapter 8 — Components Tab
 13. AC-06 Command Palette
-14. AC-07 Keyboard Shortcuts
-15. AC-14 Toast Notifications
-16. Chapter 9 — Motion Lab
-17. AC-08 Animated Brand Marks ⭐
-18. Chapter 10 — Fake Data & Forms
-19. AC-11 Optimistic UI & Loading States
-20. Chapter 11 — Fake Chat UI
+14. AC-14 Toast Notifications
+15. Chapter 9 — Motion Lab
+16. AC-08 Animated Brand Marks ⭐
+17. Chapter 10 — Fake Data & Forms
+18. AC-11 Optimistic UI & Loading States
+19. Chapter 11 — Fake Chat UI
+20. AC-07 Keyboard Shortcuts
 21. Chapter 12 — Deploy It ⭐
 
 ### Phase 3 — Going Real
@@ -197,3 +197,4 @@ Either user finishes this and knows how to build.
 ## Changelog
 
 - **April 18, 2026** — Initial design doc. 19 Main Track chapters locked. 9 Tool Capabilities and 17 App Capabilities planned. Execution order defined with dependency respect.
+- **April 21, 2026** — Rescheduled AC-07 (Keyboard Shortcuts) from Phase 2 position #14 to #20. Reframed from "complete shortcut system for users who love them" to "invisible keyboard polish — the affordances users feel without noticing." New dependency on Ch 11 (Fake Chat UI) so the chapter lands with a chat input and more overlays to polish, not just a command palette.

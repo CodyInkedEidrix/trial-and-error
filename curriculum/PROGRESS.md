@@ -61,7 +61,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 - [ ] AC-04 — Agent Memory & Persistence (requires AC-01, Ch 14)
 - [ ] AC-05 — Multi-Turn Agentic Loops (requires AC-03)
 - [x] AC-06 — Command Palette (cmd+K) (requires Ch 8)
-- [ ] AC-07 — Keyboard Shortcuts (requires Ch 8, AC-06 recommended)
+- [ ] AC-07 — Keyboard Shortcuts (requires Ch 11, AC-06 recommended)
 - [ ] AC-08 — Animated Brand Marks ⭐ (requires Ch 9)
 - [ ] AC-09 — Drag-and-Drop File Uploads (requires Ch 15)
 - [ ] AC-10 — Voice Input / Speech-to-Text (AC-03 recommended)
@@ -75,6 +75,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** AC-07 — Keyboard Shortcuts
+**Currently on:** Chapter 9 — Motion Lab
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

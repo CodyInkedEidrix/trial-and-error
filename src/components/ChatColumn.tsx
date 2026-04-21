@@ -1,3 +1,5 @@
+import EidrixEye from './brand/EidrixEye'
+
 type Sender = 'eidrix' | 'user'
 
 type Message = {
@@ -45,20 +47,17 @@ function ChatMessage({ sender, text }: Message) {
 export default function ChatColumn() {
   return (
     <aside className="w-[380px] flex-shrink-0 flex flex-col h-screen border-r border-obsidian-800">
-      {/* Header — chat title + small "online" status */}
-      <header className="flex-shrink-0 px-6 py-5 bg-obsidian-900 border-b border-obsidian-800">
+      {/* Header — the Eidrix Eye IS the chat identifier now.
+          aria-label preserves the semantic meaning since the Eye
+          itself is aria-hidden. */}
+      <header
+        aria-label="Chat"
+        className="flex-shrink-0 px-6 py-4 bg-obsidian-900 border-b border-obsidian-800"
+      >
         <div className="flex items-center gap-3">
-          <h2 className="font-display text-xl font-medium text-text-primary">
-            Chat
-          </h2>
-          <span className="flex items-center gap-1.5">
-            <span
-              className="h-2 w-2 rounded-full"
-              style={{ backgroundColor: 'var(--cobalt-500)' }}
-            />
-            <span className="font-mono text-xs uppercase tracking-widest text-text-tertiary">
-              online
-            </span>
+          <EidrixEye size={40} state="idle" />
+          <span className="font-mono text-xs uppercase tracking-widest text-text-tertiary">
+            online
           </span>
         </div>
       </header>

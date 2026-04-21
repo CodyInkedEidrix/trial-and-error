@@ -63,7 +63,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 - [x] AC-06 — Command Palette (cmd+K) (requires Ch 8)
 - [ ] AC-07 — Keyboard Shortcuts (requires Ch 11, AC-06 recommended)
 - [x] AC-08a — The Eidrix Eye ⭐ (requires Ch 9)
-- [ ] AC-08b — Eye Tuning Playground (requires AC-08a)
+- [x] AC-08b — Eye Tuning Playground (requires AC-08a)
 - [ ] AC-09 — Drag-and-Drop File Uploads (requires Ch 15)
 - [ ] AC-10 — Voice Input / Speech-to-Text (AC-03 recommended)
 - [ ] AC-11 — Optimistic UI & Loading States (requires Ch 10)
@@ -76,6 +76,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** AC-08b — Eye Tuning Playground
+**Currently on:** Chapter 10 — Fake Data & Forms
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

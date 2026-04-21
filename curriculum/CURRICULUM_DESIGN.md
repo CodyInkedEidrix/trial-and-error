@@ -80,7 +80,8 @@ Students are free to skip à la carte items, but the prerequisites for each are 
 | AC-05 | Multi-Turn Agentic Loops | AC-03 | Plan → execute → reflect → execute again. Real autonomy. |
 | AC-06 | Command Palette (cmd+K) | Ch 8 | Linear/Raycast/Notion-style universal search and actions. |
 | AC-07 | Keyboard Shortcuts | Ch 11, AC-06 rec | Invisible keyboard polish — Escape to close overlays, Cmd+Enter to submit, tab trapping in modals. The affordances users feel without noticing. |
-| AC-08 | Animated Brand Marks | Ch 9 | The Eidrix Eye-style signature animations. "Holy shit how" skill. |
+| AC-08a | The Eidrix Eye | Ch 9 | The signature living animated SVG component — six layers, four states, seven reactions. Ships to real Eidrix unchanged. |
+| AC-08b | Eye Tuning Playground | AC-08a | Live sliders, preset save/load, code export for tuning every Eye parameter. Same pattern as Motion Lab v2. |
 | AC-09 | Drag-and-Drop File Uploads | Ch 15 | With preview, progress, chunked uploads, error handling. |
 | AC-10 | Voice Input / Speech-to-Text | AC-03 rec | Contractor-with-dirty-hands feature. Real-world operator value. |
 | AC-11 | Optimistic UI & Loading States | Ch 10 | Skeleton loaders, optimistic updates, smooth transitions. |
@@ -119,47 +120,48 @@ Stars mark the biggest "milestone" moments.
 13. AC-06 Command Palette
 14. AC-14 Toast Notifications
 15. Chapter 9 — Motion Lab
-16. AC-08 Animated Brand Marks ⭐
-17. Chapter 10 — Fake Data & Forms
-18. AC-11 Optimistic UI & Loading States
-19. Chapter 11 — Fake Chat UI
-20. AC-07 Keyboard Shortcuts
-21. Chapter 12 — Deploy It ⭐
+16. AC-08a The Eidrix Eye ⭐
+17. AC-08b Eye Tuning Playground
+18. Chapter 10 — Fake Data & Forms
+19. AC-11 Optimistic UI & Loading States
+20. Chapter 11 — Fake Chat UI
+21. AC-07 Keyboard Shortcuts
+22. Chapter 12 — Deploy It ⭐
 
 ### Phase 3 — Going Real
 
-22. Chapter 13 — Environment Variables
-23. AC-01 Streaming Chat Foundation ⭐
-24. TC-02 Web Search
-25. TC-03 Image Analysis
-26. Chapter 14 — Supabase Foundation
-27. AC-02 Context-Aware Chat
-28. AC-03 Tool Calling ⭐⭐
-29. AC-17 Streaming UI Updates
-30. AC-04 Agent Memory & Persistence
-31. AC-05 Multi-Turn Agentic Loops
-32. AC-16 Agentic Subagents ⭐⭐⭐
+23. Chapter 13 — Environment Variables
+24. AC-01 Streaming Chat Foundation ⭐
+25. TC-02 Web Search
+26. TC-03 Image Analysis
+27. Chapter 14 — Supabase Foundation
+28. AC-02 Context-Aware Chat
+29. AC-03 Tool Calling ⭐⭐
+30. AC-17 Streaming UI Updates
+31. AC-04 Agent Memory & Persistence
+32. AC-05 Multi-Turn Agentic Loops
+33. AC-16 Agentic Subagents ⭐⭐⭐
 
 ### Phase 4 — Completion
 
-33. Chapter 15 — Files & Images
-34. AC-09 Drag-and-Drop File Uploads
-35. AC-10 Voice Input
-36. AC-12 Smart Search (à la carte)
-37. AC-13 Real-Time Presence (à la carte)
-38. AC-15 Magic Link (à la carte)
+34. Chapter 15 — Files & Images
+35. AC-09 Drag-and-Drop File Uploads
+36. AC-10 Voice Input
+37. AC-12 Smart Search (à la carte)
+38. AC-13 Real-Time Presence (à la carte)
+39. AC-15 Magic Link (à la carte)
 
 ### Phase 5 — Advanced
 
-39. Chapter 16 — Skills & Design System
-40. TC-07 Writing Custom Skills
-41. TC-09 Skills Discovery & Curation
-42. Chapter 17 — MCP Introduction
-43. Chapter 18 — Registry Pattern
-44. TC-05 Git Surgery (à la carte)
-45. TC-06 Subagents — Claude Code's (à la carte)
-46. TC-08 CLAUDE.md Mastery (à la carte)
-47. Chapter 19 — Graduation Project
+40. Chapter 16 — Skills & Design System
+41. TC-07 Writing Custom Skills
+42. TC-09 Skills Discovery & Curation
+43. Chapter 17 — MCP Introduction
+44. Chapter 18 — Registry Pattern
+45. TC-05 Git Surgery (à la carte)
+46. TC-06 Subagents — Claude Code's (à la carte)
+47. TC-08 CLAUDE.md Mastery (à la carte)
+48. Chapter 19 — Graduation Project
 
 ---
 
@@ -198,3 +200,4 @@ Either user finishes this and knows how to build.
 
 - **April 18, 2026** — Initial design doc. 19 Main Track chapters locked. 9 Tool Capabilities and 17 App Capabilities planned. Execution order defined with dependency respect.
 - **April 21, 2026** — Rescheduled AC-07 (Keyboard Shortcuts) from Phase 2 position #14 to #20. Reframed from "complete shortcut system for users who love them" to "invisible keyboard polish — the affordances users feel without noticing." New dependency on Ch 11 (Fake Chat UI) so the chapter lands with a chat input and more overlays to polish, not just a command palette.
+- **April 21, 2026** — Split AC-08 (Animated Brand Marks) into AC-08a (The Eidrix Eye — the signature component itself) and AC-08b (Eye Tuning Playground — live sliders and preset save/load). AC-08a keeps position #16 and the ⭐ signature marking; AC-08b inserts at new position #17. Every item from old #17 onward shifted +1 (31 items renumbered across Phases 2–5, total curriculum length 47 → 48).

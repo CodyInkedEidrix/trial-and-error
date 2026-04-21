@@ -1,11 +1,10 @@
-import { useState } from 'react'
 import TypographyLab from './TypographyLab'
 import ColorLab from './ColorLab'
 import ComponentsTab from './ComponentsTab'
 
-type TabId = 'lab' | 'components' | 'records' | 'chat' | 'settings'
+export type TabId = 'lab' | 'components' | 'records' | 'chat' | 'settings'
 
-const tabs: { id: TabId; label: string }[] = [
+export const tabs: { id: TabId; label: string }[] = [
   { id: 'lab', label: 'Lab' },
   { id: 'components', label: 'Components' },
   { id: 'records', label: 'Records' },
@@ -68,9 +67,12 @@ function ComingSoon({ label }: { label: string }) {
   )
 }
 
-export default function TabsPanel() {
-  const [activeTab, setActiveTab] = useState<TabId>('lab')
+interface TabsPanelProps {
+  activeTab: TabId
+  setActiveTab: (id: TabId) => void
+}
 
+export default function TabsPanel({ activeTab, setActiveTab }: TabsPanelProps) {
   const activeLabel = tabs.find((t) => t.id === activeTab)?.label ?? ''
 
   return (

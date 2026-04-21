@@ -29,7 +29,7 @@ Future chapters in this folder might cover:
 
 ## Current chapters
 
-(none yet — this is the scaffold. Chapters get added here as they're written.)
+- **[AC-06 — Command Palette (cmd+K)](ac-06-command-palette.md)** — Build a Linear/Raycast-style command palette with cmd+K/ctrl+K trigger, fuzzy search, and a typed action system. First App Capability chapter, and the pattern foundation for AC-03 (Tool Calling) later. ~90 min. Requires Ch 8.
 
 ## Adding a new App Capability chapter
 

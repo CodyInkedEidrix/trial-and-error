@@ -1,5 +1,6 @@
 import TypographyLab from './TypographyLab'
 import ColorLab from './ColorLab'
+import MotionLab from './MotionLab'
 import ComponentsTab from './ComponentsTab'
 
 export type TabId = 'lab' | 'components' | 'records' | 'chat' | 'settings'
@@ -96,6 +97,7 @@ export default function TabsPanel({ activeTab, setActiveTab }: TabsPanelProps) {
           <>
             <TypographyLab />
             <ColorLab />
+            <MotionLab />
           </>
         )}
         {activeTab === 'components' && <ComponentsTab />}

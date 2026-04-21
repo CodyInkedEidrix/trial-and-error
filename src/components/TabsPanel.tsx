@@ -2,12 +2,20 @@ import TypographyLab from './TypographyLab'
 import ColorLab from './ColorLab'
 import MotionLab from './MotionLab'
 import ComponentsTab from './ComponentsTab'
+import BrandTab from './BrandTab'
 
-export type TabId = 'lab' | 'components' | 'records' | 'chat' | 'settings'
+export type TabId =
+  | 'lab'
+  | 'components'
+  | 'brand'
+  | 'records'
+  | 'chat'
+  | 'settings'
 
 export const tabs: { id: TabId; label: string }[] = [
   { id: 'lab', label: 'Lab' },
   { id: 'components', label: 'Components' },
+  { id: 'brand', label: 'Brand' },
   { id: 'records', label: 'Records' },
   { id: 'chat', label: 'Chat' },
   { id: 'settings', label: 'Settings' },
@@ -101,9 +109,10 @@ export default function TabsPanel({ activeTab, setActiveTab }: TabsPanelProps) {
           </>
         )}
         {activeTab === 'components' && <ComponentsTab />}
-        {activeTab !== 'lab' && activeTab !== 'components' && (
-          <ComingSoon label={activeLabel} />
-        )}
+        {activeTab === 'brand' && <BrandTab />}
+        {activeTab !== 'lab' &&
+          activeTab !== 'components' &&
+          activeTab !== 'brand' && <ComingSoon label={activeLabel} />}
       </div>
     </main>
   )

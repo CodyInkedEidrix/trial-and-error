@@ -31,6 +31,7 @@ Future chapters in this folder might cover:
 
 - **[AC-06 — Command Palette (cmd+K)](ac-06-command-palette.md)** — Build a Linear/Raycast-style command palette with cmd+K/ctrl+K trigger, fuzzy search, and a typed action system. First App Capability chapter, and the pattern foundation for AC-03 (Tool Calling) later. ~90 min. Requires Ch 8.
 - **[AC-08a — The Eidrix Eye](ac-08a-eidrix-eye.md)** — The signature chapter. Build the Eidrix Eye — a living animated SVG component with six animation layers, four states (Idle / Thinking / Speaking / Muted), and seven reactions. Mounts at 24px in the chat column header and 240px in a new Brand tab. Config-driven so AC-08b's tuning playground drops in cleanly. ~4 hours. Requires Ch 9.
+- **[AC-08b — The Eidrix Eye Tuning Playground](ac-08b-eye-tuning-playground.md)** — Companion to AC-08a. Transform the Brand tab into a full design instrument: preset bar, live sliders for every Eye parameter, three-size side-by-side preview, live TypeScript code export, custom preset save. Same pattern as Motion Lab v2. ~3 hours. Requires AC-08a.
 
 ## Adding a new App Capability chapter
 

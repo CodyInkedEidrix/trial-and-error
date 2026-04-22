@@ -21,7 +21,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 - [x] Chapter 8 — Components Tab
 - [x] Chapter 9 — Motion Lab
 - [x] Chapter 10 — Fake Data & Forms
-- [ ] Chapter 10.5 — The Record-Detail Tab Pattern
+- [ ] Chapter 10.5 — The Adaptable Three-Tier Tab Engine
 - [ ] Chapter 11 — Fake Chat UI
 - [ ] Chapter 12 — Deploy It ⭐
 
@@ -77,6 +77,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** Chapter 10.5 — The Record-Detail Tab Pattern
+**Currently on:** Chapter 10.5 — The Adaptable Three-Tier Tab Engine
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

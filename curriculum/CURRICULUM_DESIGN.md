@@ -118,7 +118,7 @@ Stars mark the biggest "milestone" moments.
 11. TC-04 Reading Other People's Code
 12. Chapter 8 — Components Tab
 13. AC-06 Command Palette
-14. AC-14 Toast Notifications
+14. AC-14 Toast Notifications ✓ (shipped as part of Ch 10)
 15. Chapter 9 — Motion Lab
 16. AC-08a The Eidrix Eye ⭐
 17. AC-08b Eye Tuning Playground
@@ -203,3 +203,4 @@ Either user finishes this and knows how to build.
 - **April 21, 2026** — Rescheduled AC-07 (Keyboard Shortcuts) from Phase 2 position #14 to #20. Reframed from "complete shortcut system for users who love them" to "invisible keyboard polish — the affordances users feel without noticing." New dependency on Ch 11 (Fake Chat UI) so the chapter lands with a chat input and more overlays to polish, not just a command palette.
 - **April 21, 2026** — Split AC-08 (Animated Brand Marks) into AC-08a (The Eidrix Eye — the signature component itself) and AC-08b (Eye Tuning Playground — live sliders and preset save/load). AC-08a keeps position #16 and the ⭐ signature marking; AC-08b inserts at new position #17. Every item from old #17 onward shifted +1 (31 items renumbered across Phases 2–5, total curriculum length 47 → 48).
 - **April 21, 2026** — Inserted Chapter 10.5 — The Record-Detail Tab Pattern at position 19 (right after Chapter 10, before AC-11). Short Main Track chapter (~90 min) that teaches the tab-based record-detail pattern used in real Eidrix — clicking a customer row opens them as a third-tier tab (Records → [Customer Name]), editable in place rather than in a slide-in panel. Same data, different UI pattern. Every item from old #19 onward shifted +1 (30 items renumbered across Phases 2–5, total curriculum length 48 → 49).
+- **April 21, 2026** — Absorbed AC-14 (Toast Notifications with Actions) into Chapter 10. AC-14 was originally scheduled at position #14 but never shipped standalone; the Chapter 10 build needed a generic toast system for the undo-delete pattern, so the full AC-14 capability was built and shipped as part of position #18. Position #14 retained in the locked order with a "✓ shipped as part of Ch 10" inline marker so the historical sequence stays readable. Also established a new architectural principle in CLAUDE.md — the chat column is sovereign and overlays must scope to the tabs area. Curriculum length unchanged at 49.

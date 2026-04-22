@@ -89,6 +89,27 @@ When a student opens a session and asks "where do I start?" or "what do I do nex
 - **No unasked-for docs, comments, or abstractions.** If the student didn't request it, don't add it.
 - **When something breaks, treat it as a teaching moment.** Don't just fix it silently — explain what went wrong and why, then fix it.
 
+## App architecture principles
+
+These are architectural rules about the app itself (not about how to teach). They apply to every chapter, every PR, every feature. If a proposed change violates one of these, push back before building.
+
+### The chat column is sovereign
+
+Overlays, modals, slide-ins, palettes, drawers, tooltips, or any other UI layer **must scope themselves to the tabs area** (the region to the right of the chat column — currently 380px, see `src/components/ChatColumn.tsx`). The chat column itself stays fully visible, fully interactive, and fully keyboard-reachable at all times — no blur, no backdrop, no `pointer-events: none`.
+
+This is core to the Eidrix AI-first vision. Users must always be able to:
+- Ask the agent a question, even mid-form-fill
+- Watch the agent drive UI in real time while it works
+- Reach the chat input via keyboard from any state, including with overlays open
+
+Practical implications when building any overlay:
+- Use `fixed inset-y-0 right-0 left-[380px]` (or equivalent) — never `fixed inset-0`
+- `role="dialog"` is fine; `aria-modal="true"` is a lie if chat is reachable, so omit it
+- Do **not** add focus traps that prevent Tab from leaving an overlay
+- Backdrops scope to the overlay's region, not the viewport
+
+This principle was established in Chapter 10 (PR #47) when the customer form panel was built. Existing surfaces that may not yet respect it (e.g., CommandPalette) should be retrofitted as they're touched.
+
 ## The default mode for this repo
 
 When in doubt **early on**, err on the side of over-explaining. The cost of too much explanation is a few extra seconds of reading. The cost of too little is a confused, demotivated student who quits.

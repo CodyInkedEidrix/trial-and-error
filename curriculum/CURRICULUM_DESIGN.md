@@ -60,8 +60,8 @@ Students are free to skip à la carte items, but the prerequisites for each are 
 | ID | Name | Depends on | Why it matters |
 |---|---|---|---|
 | TC-01 | Plan Mode & Thorough Planning | Nothing | Meta-skill. Makes every future chapter better. Do first. |
-| TC-02 | Web Search & Research | Nothing | Opens the internet as a research tool inside Claude Code. |
-| TC-03 | Image Analysis & Screenshots | Nothing | Drop a screenshot, have Claude Code read it. Design work accelerator. |
+| TC-02 | Web Search & Research | — | **Absorbed:** student proficient with web_search through normal curriculum usage by AC-01. |
+| TC-03 | Image Analysis & Screenshots | — | **Absorbed:** student proficient with image analysis (drops screenshots into Claude Code regularly) by AC-01. |
 | TC-04 | Reading Other People's Code | Ch 7 helpful | Critical for working with real Eidrix, inherited codebases, open source. |
 | TC-05 | Git Surgery | Ch 2.5 | Stash, rebase, cherry-pick, revert merged PRs. Recovery at the expert level. |
 | TC-06 | Subagents (Claude Code's) | TC-01 | How Claude Code spawns helpers. Leverage them deliberately. |
@@ -133,36 +133,34 @@ Stars mark the biggest "milestone" moments.
 
 24. Chapter 13 — Environment Variables
 25. AC-01 Streaming Chat Foundation ⭐
-26. TC-02 Web Search
-27. TC-03 Image Analysis
-28. Chapter 14 — Supabase Foundation
-29. AC-02 Context-Aware Chat
-30. AC-03 Tool Calling ⭐⭐
-31. AC-17 Streaming UI Updates
-32. AC-04 Agent Memory & Persistence
-33. AC-05 Multi-Turn Agentic Loops
-34. AC-16 Agentic Subagents ⭐⭐⭐
+26. Chapter 14 — Supabase Foundation
+27. AC-02 Context-Aware Chat
+28. AC-03 Tool Calling ⭐⭐
+29. AC-17 Streaming UI Updates
+30. AC-04 Agent Memory & Persistence
+31. AC-05 Multi-Turn Agentic Loops
+32. AC-16 Agentic Subagents ⭐⭐⭐
 
 ### Phase 4 — Completion
 
-35. Chapter 15 — Files & Images
-36. AC-09 Drag-and-Drop File Uploads
-37. AC-10 Voice Input
-38. AC-12 Smart Search (à la carte)
-39. AC-13 Real-Time Presence (à la carte)
-40. AC-15 Magic Link (à la carte)
+33. Chapter 15 — Files & Images
+34. AC-09 Drag-and-Drop File Uploads
+35. AC-10 Voice Input
+36. AC-12 Smart Search (à la carte)
+37. AC-13 Real-Time Presence (à la carte)
+38. AC-15 Magic Link (à la carte)
 
 ### Phase 5 — Advanced
 
-41. Chapter 16 — Skills & Design System
-42. TC-07 Writing Custom Skills
-43. TC-09 Skills Discovery & Curation
-44. Chapter 17 — MCP Introduction
-45. Chapter 18 — Registry Pattern
-46. TC-05 Git Surgery (à la carte)
-47. TC-06 Subagents — Claude Code's (à la carte)
-48. TC-08 CLAUDE.md Mastery (à la carte)
-49. Chapter 19 — Graduation Project
+39. Chapter 16 — Skills & Design System
+40. TC-07 Writing Custom Skills
+41. TC-09 Skills Discovery & Curation
+42. Chapter 17 — MCP Introduction
+43. Chapter 18 — Registry Pattern
+44. TC-05 Git Surgery (à la carte)
+45. TC-06 Subagents — Claude Code's (à la carte)
+46. TC-08 CLAUDE.md Mastery (à la carte)
+47. Chapter 19 — Graduation Project
 
 ---
 
@@ -205,3 +203,4 @@ Either user finishes this and knows how to build.
 - **April 21, 2026** — Inserted Chapter 10.5 — The Record-Detail Tab Pattern at position 19 (right after Chapter 10, before AC-11). Short Main Track chapter (~90 min) that teaches the tab-based record-detail pattern used in real Eidrix — clicking a customer row opens them as a third-tier tab (Records → [Customer Name]), editable in place rather than in a slide-in panel. Same data, different UI pattern. Every item from old #19 onward shifted +1 (30 items renumbered across Phases 2–5, total curriculum length 48 → 49).
 - **April 21, 2026** — Absorbed AC-14 (Toast Notifications with Actions) into Chapter 10. AC-14 was originally scheduled at position #14 but never shipped standalone; the Chapter 10 build needed a generic toast system for the undo-delete pattern, so the full AC-14 capability was built and shipped as part of position #18. Position #14 retained in the locked order with a "✓ shipped as part of Ch 10" inline marker so the historical sequence stays readable. Also established a new architectural principle in CLAUDE.md — the chat column is sovereign and overlays must scope to the tabs area. Curriculum length unchanged at 49.
 - **April 21, 2026** — Pivoted Chapter 10.5 (position #19) from "The Record-Detail Tab Pattern" (~90 min, narrow record-detail UX variant) to "The Adaptable Three-Tier Tab Engine" (~3.5 hours, config-driven architecture chapter). The new scope makes Ch 10.5 the load-bearing "same codebase, multiple products" chapter — students build a typed `BusinessConfig` + engine, then prove adaptability by swapping the active config to transform the contractor workspace into a merch seller workspace. `BusinessConfig` becomes the spec that the Sunday Interview generates, per-tenant theming (Ch 18) modifies, and agentic tool calling (AC-03) reads. Title and scope updated in PROGRESS.md and position #19 accordingly. No renumbering — slot position preserved.
+- **April 22, 2026** — Absorbed TC-02 (Web Search) and TC-03 (Image Analysis) after AC-01. Student had internalized both skills through normal curriculum progression. Kept TC-05 (Git Surgery), TC-06 (Subagents), TC-07 (Writing Custom Skills), TC-08 (CLAUDE.md Mastery), TC-09 (Skills Discovery) which teach Claude Code-specific skills not covered elsewhere. Total curriculum length reduced by 2 items (49 → 47). Tool Capabilities table rows for TC-02/TC-03 preserved with "Absorbed" markers for historical reference. All items from old position #28 (Ch 14) onward shifted -2 across Phases 3–5.

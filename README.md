@@ -1,5 +1,7 @@
 # Trial and Error
 
+**Live:** https://trialand-error.netlify.app
+
 Learning to build with Claude Code, one chapter at a time.
 
 This is a self-teaching curriculum that walks a complete beginner from zero through building a mini Eidrix-style app — tabs, chat UI, Supabase, AI, MCP — one small chapter at a time.

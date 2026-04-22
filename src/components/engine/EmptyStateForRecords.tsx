@@ -1,31 +1,37 @@
 // ──────────────────────────────────────────────────────────────────────
-// EmptyState — shown in the Records tab when there are zero customers.
+// EmptyStateForRecords — generic empty state for any record type.
 //
-// Designed moment, not a blank screen. A muted records-stack glyph,
-// confident header, one sentence of context, and a primary CTA that
-// opens the form panel in add mode.
-//
-// Triggered when `customers.length === 0` AND no pending deletes exist
-// (we don't want to flash empty during the 5s undo window if the user
-// just deleted their last customer).
+// Replaces the customer-specific EmptyState. The card-stack glyph and
+// ember plus are preserved — they read as "record slot waiting to be
+// filled" regardless of what the records are. Copy uses the config's
+// singular/plural labels so messaging stays accurate per business type.
 // ──────────────────────────────────────────────────────────────────────
 
 import Button from '../ui/Button'
 
-interface EmptyStateProps {
-  onAdd: () => void
+interface EmptyStateForRecordsProps {
+  singular: string
+  plural: string
+  onAdd?: () => void
 }
 
-export default function EmptyState({ onAdd }: EmptyStateProps) {
+export default function EmptyStateForRecords({
+  singular,
+  plural,
+  onAdd,
+}: EmptyStateForRecordsProps) {
+  const lowerSingular = singular.toLowerCase()
+  const lowerPlural = plural.toLowerCase()
+
   return (
     <div className="h-full flex flex-col items-center justify-center px-6 -mt-12">
-      {/* Stacked-cards glyph — three concentric rounded rectangles fading
-          inward, suggesting a record stack waiting to be filled. */}
+      {/* Three stacked cards + ember plus — the same glyph as the
+          customer-specific version. Reads as "record stack waiting to
+          be filled" for any record type. */}
       <div className="relative w-24 h-24 mb-6 opacity-40">
         <div className="absolute inset-x-3 top-2 bottom-12 rounded-md border border-obsidian-700" />
         <div className="absolute inset-x-2 top-5 bottom-8 rounded-md border border-obsidian-700/80 bg-obsidian-900/40" />
         <div className="absolute inset-x-1 top-9 bottom-2 rounded-md border border-obsidian-700 bg-obsidian-900/60 flex items-center justify-center">
-          {/* Subtle ember plus — hints at "add" without being a button */}
           <svg
             width="20"
             height="20"
@@ -43,18 +49,18 @@ export default function EmptyState({ onAdd }: EmptyStateProps) {
       </div>
 
       <h2 className="font-display text-xl text-text-primary">
-        No customers yet
+        No {lowerPlural} yet
       </h2>
 
       <p className="font-body text-sm text-text-tertiary mt-2 mb-6 text-center max-w-sm">
-        Add your first customer to start tracking leads, active jobs, and
-        history. Everything stays here on your device.
+        Add your first {lowerSingular} to start tracking. Everything stays
+        here on your device.
       </p>
 
-      <Button label="Add your first customer" onClick={onAdd} size="md" />
+      {onAdd && (
+        <Button label={`Add your first ${lowerSingular}`} onClick={onAdd} size="md" />
+      )}
 
-      {/* Faint accent line — same gradient flourish used elsewhere in the
-          app for "designed empty" moments (mirrors the Coming Soon bar). */}
       <div
         className="mt-10 h-px w-32"
         aria-hidden

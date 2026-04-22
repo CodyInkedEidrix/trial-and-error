@@ -36,7 +36,7 @@ import Button from '../ui/Button'
 // Types & defaults
 // ──────────────────────────────────────────────────────────────────────
 
-interface FormValues {
+export interface FormValues {
   name: string
   company: string
   status: CustomerStatus
@@ -46,7 +46,7 @@ interface FormValues {
   notes: string
 }
 
-const emptyValues: FormValues = {
+export const emptyValues: FormValues = {
   name: '',
   company: '',
   status: 'lead',
@@ -56,7 +56,7 @@ const emptyValues: FormValues = {
   notes: '',
 }
 
-function customerToValues(c: Customer): FormValues {
+export function customerToValues(c: Customer): FormValues {
   return {
     name: c.name,
     company: c.company ?? '',
@@ -76,7 +76,7 @@ function customerToValues(c: Customer): FormValues {
  * than empty strings. Keeps the stored shape tidy and future-proofs
  * Supabase ports (empty-string-in-text-column is a classic footgun).
  */
-function valuesToInput(v: FormValues): CustomerInput {
+export function valuesToInput(v: FormValues): CustomerInput {
   const trim = (s: string) => (s.trim() === '' ? undefined : s.trim())
   return {
     name: v.name.trim(),
@@ -123,7 +123,7 @@ interface FieldProps {
   children: ReactNode
 }
 
-function Field({ label, required, error, children }: FieldProps) {
+export function Field({ label, required, error, children }: FieldProps) {
   const hasError = Boolean(error)
   return (
     <div className="flex flex-col gap-1.5">
@@ -142,7 +142,7 @@ function Field({ label, required, error, children }: FieldProps) {
   )
 }
 
-function inputClasses(hasError: boolean) {
+export function inputClasses(hasError: boolean) {
   return (
     'bg-obsidian-800 text-text-primary placeholder-text-tertiary px-3 py-2 rounded-md border transition-all duration-150 ease-out focus:outline-none ' +
     (hasError
@@ -180,7 +180,7 @@ const statusSelectedClasses: Record<CustomerStatus, string> = {
   archived: 'bg-obsidian-800 text-text-secondary italic',
 }
 
-function StatusSegmented({
+export function StatusSegmented({
   value,
   onChange,
 }: {

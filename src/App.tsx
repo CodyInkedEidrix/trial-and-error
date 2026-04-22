@@ -4,15 +4,13 @@ import TabsPanel from './components/TabsPanel'
 import CommandPalette from './components/CommandPalette'
 import CustomerForm from './components/records/CustomerForm'
 import ToastStack from './components/toast/ToastStack'
-import type { TabId } from './components/TabsPanel'
 
 export default function App() {
-  // Tab state is lifted here (previously lived in TabsPanel) so the
-  // command palette can switch tabs too — both consumers now read from
-  // and write to the same source of truth.
-  const [activeTab, setActiveTab] = useState<TabId>('lab')
+  // Tab state used to live here as useState; it's now in `tabStore`
+  // so the palette, future agent tool calls, and any other surface
+  // can drive tab navigation without prop drilling.
 
-  // Command palette open state. Local useState is enough since only App
+  // Command palette open state — still local useState since only App
   // and CommandPalette touch it.
   const [paletteOpen, setPaletteOpen] = useState(false)
 
@@ -34,13 +32,9 @@ export default function App() {
     <>
       <div className="flex h-screen overflow-hidden">
         <ChatColumn />
-        <TabsPanel activeTab={activeTab} setActiveTab={setActiveTab} />
+        <TabsPanel />
       </div>
-      <CommandPalette
-        open={paletteOpen}
-        onOpenChange={setPaletteOpen}
-        setActiveTab={setActiveTab}
-      />
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <CustomerForm />
       <ToastStack />
     </>

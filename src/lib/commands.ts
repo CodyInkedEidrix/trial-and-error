@@ -1,6 +1,5 @@
 import type { ReactNode } from 'react'
-import type { TabId } from '../components/TabsPanel'
-import { tabs } from '../components/TabsPanel'
+import { activeConfig } from '../config/active'
 
 export type CommandCategory = 'Navigation' | 'Actions'
 
@@ -15,7 +14,7 @@ export interface Command {
 }
 
 interface CommandDeps {
-  setActiveTab: (id: TabId) => void
+  setActiveTab: (id: string) => void
   setSearch: (value: string) => void
   closePalette: () => void
 }
@@ -25,11 +24,13 @@ interface CommandDeps {
  * pure data file (no hooks, no React imports beyond the type) while
  * still letting each command's execute function reach into stateful
  * things like the active tab and the palette's internal search.
+ *
+ * Post-Ch-10.5: Navigation commands derive from `activeConfig.primaryTabs`
+ * rather than a hardcoded list, so swapping business type swaps the
+ * palette's nav commands automatically.
  */
 export function createCommands(deps: CommandDeps): Command[] {
-  // Navigation commands are derived from the tabs array, so adding
-  // a 6th tab later automatically adds a 6th nav command.
-  const navCommands: Command[] = tabs.map((tab) => ({
+  const navCommands: Command[] = activeConfig.primaryTabs.map((tab) => ({
     id: `nav-${tab.id}`,
     name: `Jump to ${tab.label}`,
     description: `Switch to the ${tab.label} tab`,

@@ -1,12 +1,11 @@
 import { Command } from 'cmdk'
 import { useMemo, useState } from 'react'
-import type { TabId } from './TabsPanel'
 import { createCommands } from '../lib/commands'
+import { useTabStore } from '../lib/tabStore'
 
 interface CommandPaletteProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  setActiveTab: (id: TabId) => void
 }
 
 // Shared class string for each command row. Centralised so the Navigation
@@ -23,18 +22,18 @@ const groupClass =
 export default function CommandPalette({
   open,
   onOpenChange,
-  setActiveTab,
 }: CommandPaletteProps) {
   const [search, setSearch] = useState('')
+  const navigatePrimary = useTabStore((s) => s.navigatePrimary)
 
   const commands = useMemo(
     () =>
       createCommands({
-        setActiveTab,
+        setActiveTab: navigatePrimary,
         setSearch,
         closePalette: () => onOpenChange(false),
       }),
-    [setActiveTab, onOpenChange]
+    [navigatePrimary, onOpenChange]
   )
 
   const navCommands = commands.filter((c) => c.category === 'Navigation')

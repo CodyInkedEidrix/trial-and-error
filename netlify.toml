@@ -1,0 +1,16 @@
+# ─── Netlify build + functions configuration ─────────────────────────
+# Explicit build command + publish dir (also auto-detected from the
+# Vite config, but being explicit makes the contract unambiguous).
+#
+# The `[functions]` block tells Netlify where our serverless functions
+# live. esbuild is the default bundler for TypeScript functions and
+# handles our .ts files natively — no separate compile step needed.
+# ──────────────────────────────────────────────────────────────────────
+
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"

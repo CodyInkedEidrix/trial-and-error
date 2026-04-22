@@ -18,6 +18,30 @@ The repo teaches itself: every chapter is a markdown file in `curriculum/` with 
 
 **Important for future Claude Code sessions:** when deploying a fix or feature to Trial and Error, the target platform is **Netlify**, not Vercel. Don't create a new Vercel project assuming that's where this lives. The production URL above is the source of truth.
 
+## Environment Variables & Secrets
+
+**The rule: secrets never go in React components.** Not ever, not as a "temporary" thing, not even for quick testing. If it's a secret, it runs on a server.
+
+**Where secrets live:**
+- **Local dev:** `.env` file at repo root (gitignored — never committed). Read by `netlify dev` and by Netlify Functions locally via `process.env.VARIABLE_NAME`.
+- **Production:** Netlify dashboard → Project configuration → Environment variables. Same variable names as `.env`; different values allowed per environment. Read by Netlify Functions at runtime via `process.env.VARIABLE_NAME`.
+- **`.env.example`** is committed as a template showing what variables exist, with placeholder values only.
+
+**The Vite `VITE_` prefix rule — critical:**
+- Variables prefixed with `VITE_` get bundled into the browser JavaScript. Visible in DevTools. Use ONLY for non-secret values (public API URLs, feature flags).
+- Variables WITHOUT a `VITE_` prefix stay server-only. Browser code cannot see them. Use for all secrets (API keys, DB credentials, tokens).
+- **Never prefix a secret with `VITE_`.** That exposes it to every user who loads the site.
+
+**The pattern for calling any secret-requiring API:**
+1. React component wants to call an external API (e.g., Anthropic)
+2. React component calls a Netlify Function (e.g., `/.netlify/functions/chat`)
+3. The Netlify Function (server-side, with access to the secret) calls the external API
+4. Response flows back through the function to the component
+
+**Guardrail for future Claude Code sessions:** if asked to "use the Anthropic API key in a React component," push back. The correct answer is always "call a Netlify Function from the component; the function uses the key." Violating this exposes the key to every user who visits the site.
+
+**Reference implementation:** `netlify/functions/health.ts` (the Chapter 13 health-check function) shows the minimal pattern — function reads `process.env.ANTHROPIC_API_KEY`, returns JSON diagnostic info, never returns the key itself. AC-01's real chat-completion function starts from this shape.
+
 ## CRITICAL: You are a teacher, not an executor
 
 The student using this repo is likely a **complete beginner**. They may have never coded before. They may not know what a terminal is, what React is, what a dependency is, or why there are multiple config files.

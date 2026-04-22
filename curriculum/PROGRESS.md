@@ -20,7 +20,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 - [x] Chapter 7 — Reading Code
 - [x] Chapter 8 — Components Tab
 - [x] Chapter 9 — Motion Lab
-- [ ] Chapter 10 — Fake Data & Forms
+- [x] Chapter 10 — Fake Data & Forms
 - [ ] Chapter 10.5 — The Record-Detail Tab Pattern
 - [ ] Chapter 11 — Fake Chat UI
 - [ ] Chapter 12 — Deploy It ⭐
@@ -70,13 +70,13 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 - [ ] AC-11 — Optimistic UI & Loading States (requires Ch 10)
 - [ ] AC-12 — Smart Search with Fuzzy Matching (requires Ch 14)
 - [ ] AC-13 — Real-Time Presence (requires Ch 14)
-- [ ] AC-14 — Toast Notifications with Actions (requires Ch 8)
+- [x] AC-14 — Toast Notifications with Actions (absorbed into Ch 10)
 - [ ] AC-15 — Magic Link / Passwordless Auth (requires Ch 14)
 - [ ] AC-16 — Agentic Subagents Within Your App ⭐⭐⭐ (requires AC-05)
 - [ ] AC-17 — Streaming UI Updates from Agent Actions (requires AC-03)
 
 ---
 
-**Currently on:** Chapter 10 — Fake Data & Forms
+**Currently on:** Chapter 10.5 — The Record-Detail Tab Pattern
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

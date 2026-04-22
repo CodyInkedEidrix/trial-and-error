@@ -3,6 +3,7 @@ import ColorLab from './ColorLab'
 import MotionLab from './MotionLab'
 import ComponentsTab from './ComponentsTab'
 import BrandTab from './BrandTab'
+import RecordsTab from './records/RecordsTab'
 
 export type TabId =
   | 'lab'
@@ -110,9 +111,11 @@ export default function TabsPanel({ activeTab, setActiveTab }: TabsPanelProps) {
         )}
         {activeTab === 'components' && <ComponentsTab />}
         {activeTab === 'brand' && <BrandTab />}
+        {activeTab === 'records' && <RecordsTab />}
         {activeTab !== 'lab' &&
           activeTab !== 'components' &&
-          activeTab !== 'brand' && <ComingSoon label={activeLabel} />}
+          activeTab !== 'brand' &&
+          activeTab !== 'records' && <ComingSoon label={activeLabel} />}
       </div>
     </main>
   )

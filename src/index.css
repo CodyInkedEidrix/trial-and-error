@@ -53,3 +53,19 @@ body::before {
     0 0 16px rgba(59, 130, 246, 0.7),
     0 0 32px rgba(59, 130, 246, 0.45);
 }
+
+/* Row flash — ember glow that lands softly on a newly-added
+   row, then fades. Duration is long enough to notice but short
+   enough that the UI doesn't feel busy. */
+@keyframes eidrix-row-flash {
+  0% {
+    background-color: rgba(255, 107, 26, 0.22);
+  }
+  100% {
+    background-color: transparent;
+  }
+}
+
+.eidrix-row-flash {
+  animation: eidrix-row-flash 850ms ease-out both;
+}

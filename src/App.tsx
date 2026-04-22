@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import ChatColumn from './components/ChatColumn'
 import TabsPanel from './components/TabsPanel'
 import CommandPalette from './components/CommandPalette'
+import CustomerForm from './components/records/CustomerForm'
+import ToastStack from './components/toast/ToastStack'
 import type { TabId } from './components/TabsPanel'
 
 export default function App() {
@@ -39,6 +41,8 @@ export default function App() {
         onOpenChange={setPaletteOpen}
         setActiveTab={setActiveTab}
       />
+      <CustomerForm />
+      <ToastStack />
     </>
   )
 }

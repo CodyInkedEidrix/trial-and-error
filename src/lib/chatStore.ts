@@ -114,16 +114,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     let pendingText = ''
     let rafId: number | null = null
 
-    const flushPending = () => {
-      rafId = null
-      if (pendingText.length === 0) return
-      const chunk = pendingText
-      pendingText = ''
+    // Append a text chunk to the in-progress assistant message. Used by
+    // both the RAF flusher (streaming happy path) and the final sync
+    // flush at stream-end.
+    const appendChunk = (chunk: string) => {
       set((state) => ({
         messages: state.messages.map((m) =>
           m.id === assistantId ? { ...m, content: m.content + chunk } : m,
         ),
       }))
+    }
+
+    const flushPending = () => {
+      rafId = null
+      if (pendingText.length === 0) return
+      const chunk = pendingText
+      pendingText = ''
+      appendChunk(chunk)
     }
 
     const scheduleFlush = () => {
@@ -217,11 +224,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       if (pendingText.length > 0) {
         const chunk = pendingText
         pendingText = ''
-        set((state) => ({
-          messages: state.messages.map((m) =>
-            m.id === assistantId ? { ...m, content: m.content + chunk } : m,
-          ),
-        }))
+        appendChunk(chunk)
       }
 
       set((state) => ({

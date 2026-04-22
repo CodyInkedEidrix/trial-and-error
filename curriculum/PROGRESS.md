@@ -56,7 +56,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 *À la carte chapters covering reusable app features (auth, payments, search, etc.). Do these when you need the feature for an app you're building. See [app-capabilities/INDEX.md](app-capabilities/INDEX.md) for context.*
 
-- [ ] AC-01 — Streaming Chat Foundation ⭐ (requires Ch 11, Ch 13)
+- [x] AC-01 — Streaming Chat Foundation ⭐ (requires Ch 11, Ch 13)
 - [ ] AC-02 — Context-Aware Chat (requires AC-01, Ch 10 or Ch 14)
 - [ ] AC-03 — Tool Calling ⭐⭐ (requires AC-02, Ch 14)
 - [ ] AC-04 — Agent Memory & Persistence (requires AC-01, Ch 14)
@@ -77,6 +77,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** AC-01 — Streaming Chat Foundation ⭐
+**Currently on:** TC-02 — Web Search & Research
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

@@ -146,6 +146,14 @@ Practical implications when building any overlay:
 
 This principle was established in Chapter 10 (PR #47) when the customer form panel was built. Existing surfaces that may not yet respect it (e.g., CommandPalette) should be retrofitted as they're touched.
 
+## Real Eidrix architectural memory
+
+Architectural decisions that carry from Trial and Error into real Eidrix accumulate in [curriculum/REAL_EIDRIX_NOTES.md](curriculum/REAL_EIDRIX_NOTES.md). That file is the canonical source — if the student asks "how does real Eidrix handle X?" or "what did we decide about Y?", check there first.
+
+Structure: locked decisions, open questions, patterns to port, what NOT to port. When a chapter locks a new decision or resolves an open question, update `REAL_EIDRIX_NOTES.md` as part of the same PR that landed the decision. Its changelog section tracks when each entry was added.
+
+The file is not student-facing reading in the way chapter markdown is. It's decision memory — reference when needed, update when decisions are made.
+
 ## The default mode for this repo
 
 When in doubt **early on**, err on the side of over-explaining. The cost of too much explanation is a few extra seconds of reading. The cost of too little is a confused, demotivated student who quits.

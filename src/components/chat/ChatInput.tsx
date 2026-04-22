@@ -132,13 +132,13 @@ function SendIcon() {
 // ─── Main component ──────────────────────────────────────────────────
 
 export default function ChatInput() {
-  const isThinking = useChatStore((s) => s.isThinking)
+  const isStreaming = useChatStore((s) => s.isStreaming)
   const sendUserMessage = useChatStore((s) => s.sendUserMessage)
 
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  const canSend = value.trim().length > 0 && !isThinking
+  const canSend = value.trim().length > 0 && !isStreaming
 
   // Auto-grow — height = min(scrollHeight, MAX). Measure on every change.
   const autoResize = () => {
@@ -157,10 +157,10 @@ export default function ChatInput() {
   // After Eidrix finishes thinking, pull focus back to the input so
   // rapid-fire chatting doesn't require a mouse hop.
   useEffect(() => {
-    if (!isThinking) {
+    if (!isStreaming) {
       textareaRef.current?.focus()
     }
-  }, [isThinking])
+  }, [isStreaming])
 
   // Re-measure if value was cleared externally (e.g., after send).
   useEffect(() => {
@@ -202,8 +202,8 @@ export default function ChatInput() {
               autoResize()
             }}
             onKeyDown={handleKeyDown}
-            placeholder={isThinking ? 'Eidrix is thinking…' : 'Type a message…'}
-            disabled={isThinking}
+            placeholder={isStreaming ? 'Eidrix is thinking…' : 'Type a message…'}
+            disabled={isStreaming}
             rows={1}
             className="flex-1 bg-transparent resize-none focus:outline-none font-body text-[13px] leading-relaxed text-text-primary placeholder:text-text-tertiary py-1 disabled:cursor-not-allowed"
             style={{ maxHeight: `${MAX_HEIGHT_PX}px` }}

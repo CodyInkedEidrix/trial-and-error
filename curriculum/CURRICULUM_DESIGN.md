@@ -123,7 +123,7 @@ Stars mark the biggest "milestone" moments.
 16. AC-08a The Eidrix Eye ⭐
 17. AC-08b Eye Tuning Playground
 18. Chapter 10 — Fake Data & Forms
-19. Chapter 10.5 — The Record-Detail Tab Pattern
+19. Chapter 10.5 — The Adaptable Three-Tier Tab Engine
 20. AC-11 Optimistic UI & Loading States
 21. Chapter 11 — Fake Chat UI
 22. AC-07 Keyboard Shortcuts
@@ -204,3 +204,4 @@ Either user finishes this and knows how to build.
 - **April 21, 2026** — Split AC-08 (Animated Brand Marks) into AC-08a (The Eidrix Eye — the signature component itself) and AC-08b (Eye Tuning Playground — live sliders and preset save/load). AC-08a keeps position #16 and the ⭐ signature marking; AC-08b inserts at new position #17. Every item from old #17 onward shifted +1 (31 items renumbered across Phases 2–5, total curriculum length 47 → 48).
 - **April 21, 2026** — Inserted Chapter 10.5 — The Record-Detail Tab Pattern at position 19 (right after Chapter 10, before AC-11). Short Main Track chapter (~90 min) that teaches the tab-based record-detail pattern used in real Eidrix — clicking a customer row opens them as a third-tier tab (Records → [Customer Name]), editable in place rather than in a slide-in panel. Same data, different UI pattern. Every item from old #19 onward shifted +1 (30 items renumbered across Phases 2–5, total curriculum length 48 → 49).
 - **April 21, 2026** — Absorbed AC-14 (Toast Notifications with Actions) into Chapter 10. AC-14 was originally scheduled at position #14 but never shipped standalone; the Chapter 10 build needed a generic toast system for the undo-delete pattern, so the full AC-14 capability was built and shipped as part of position #18. Position #14 retained in the locked order with a "✓ shipped as part of Ch 10" inline marker so the historical sequence stays readable. Also established a new architectural principle in CLAUDE.md — the chat column is sovereign and overlays must scope to the tabs area. Curriculum length unchanged at 49.
+- **April 21, 2026** — Pivoted Chapter 10.5 (position #19) from "The Record-Detail Tab Pattern" (~90 min, narrow record-detail UX variant) to "The Adaptable Three-Tier Tab Engine" (~3.5 hours, config-driven architecture chapter). The new scope makes Ch 10.5 the load-bearing "same codebase, multiple products" chapter — students build a typed `BusinessConfig` + engine, then prove adaptability by swapping the active config to transform the contractor workspace into a merch seller workspace. `BusinessConfig` becomes the spec that the Sunday Interview generates, per-tenant theming (Ch 18) modifies, and agentic tool calling (AC-03) reads. Title and scope updated in PROGRESS.md and position #19 accordingly. No renumbering — slot position preserved.

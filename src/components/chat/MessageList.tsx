@@ -22,7 +22,7 @@ const NEAR_BOTTOM_PX = 80
 
 export default function MessageList() {
   const messages = useChatStore((s) => s.messages)
-  const isThinking = useChatStore((s) => s.isThinking)
+  const isStreaming = useChatStore((s) => s.isStreaming)
 
   const listRef = useRef<HTMLDivElement>(null)
   const [stickToBottom, setStickToBottom] = useState(true)
@@ -44,7 +44,7 @@ export default function MessageList() {
       top: listRef.current.scrollHeight,
       behavior: 'smooth',
     })
-  }, [messages.length, isThinking, stickToBottom])
+  }, [messages.length, isStreaming, stickToBottom])
 
   const hasConversation = messages.length > 0
 

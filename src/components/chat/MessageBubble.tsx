@@ -51,6 +51,12 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           }`}
         >
           {message.content}
+          {/* Streaming cursor — inline blinking bar that signals Claude
+              is still typing. Rendered as part of the same <p> so it
+              hugs the last character, not as a separate block. */}
+          {message.status === 'streaming' && (
+            <span className="streaming-cursor" aria-hidden />
+          )}
         </p>
         <p
           className="font-mono text-[10px] text-text-tertiary mt-1 opacity-0 group-hover:opacity-100 transition-opacity"

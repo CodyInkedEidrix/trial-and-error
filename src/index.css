@@ -116,3 +116,36 @@ body::before {
 .eidrix-scrollbar::-webkit-scrollbar-corner {
   background: transparent;
 }
+
+/* ───────────────────────────────────────────────────────────────
+   Streaming cursor — the small bar that blinks at the end of an
+   in-progress assistant message to signal "still typing."
+   Inherits `currentColor` via bg-current in the span; sizing is
+   ch-based so it tracks the current font. Reduced-motion users
+   get a static half-opacity bar — still visible, not animated.
+   ─────────────────────────────────────────────────────────────── */
+
+@keyframes streaming-cursor-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.streaming-cursor {
+  display: inline-block;
+  vertical-align: baseline;
+  width: 0.45ch;
+  height: 0.95em;
+  margin-left: 2px;
+  background: currentColor;
+  opacity: 0.75;
+  animation: streaming-cursor-blink 1.1s steps(2, end) infinite;
+  transform: translateY(0.1em);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .streaming-cursor {
+    animation: none;
+    opacity: 0.5;
+  }
+}

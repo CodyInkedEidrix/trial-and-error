@@ -43,14 +43,14 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 *À la carte chapters that level up your Claude Code skills. Do these in any order, when curious or stuck. See [tool-capabilities/INDEX.md](tool-capabilities/INDEX.md) for context.*
 
 - [x] TC-01 — Plan Mode & Thorough Planning
-- [ ] TC-02 — Web Search & Research
-- [ ] TC-03 — Image Analysis & Screenshots
 - [x] TC-04 — Reading Other People's Code (Ch 7 helpful)
 - [ ] TC-05 — Git Surgery (requires Ch 2.5)
 - [ ] TC-06 — Subagents (Claude Code's) (requires TC-01)
 - [ ] TC-07 — Writing Custom Skills (requires Ch 16)
 - [ ] TC-08 — CLAUDE.md Mastery
 - [ ] TC-09 — Skills Discovery & Curation (requires Ch 16)
+
+*TC-02 (Web Search) and TC-03 (Image Analysis) absorbed — student proficient through normal curriculum usage by AC-01. See [CURRICULUM_DESIGN.md changelog](CURRICULUM_DESIGN.md#changelog).*
 
 ## App Capabilities (build features for any app)
 
@@ -77,6 +77,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** TC-02 — Web Search & Research
+**Currently on:** Chapter 14 — Supabase Foundation
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

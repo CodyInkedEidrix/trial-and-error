@@ -45,6 +45,10 @@ Tour of the most powerful skills in the ecosystem. Learn to evaluate viral skill
 
 - **Other skills to evaluate in this chapter:** Will grow as we encounter interesting ones during the curriculum.
 
+## Absorbed chapters
+
+- **TC-02 — Web Search & Research** and **TC-03 — Image Analysis & Screenshots** were in the original plan but **absorbed** by AC-01. The student had internalized both skills through normal curriculum progression — web search through Claude Code's normal usage patterns, image analysis through routine screenshot drops during design and debug work. Continuing them as dedicated chapters would have been busywork. See [CURRICULUM_DESIGN.md changelog](../CURRICULUM_DESIGN.md#changelog) (April 22, 2026 entry) for full context.
+
 ## Adding a new Tool Capability chapter
 
 When you (or a future student) wants a chapter that doesn't exist:

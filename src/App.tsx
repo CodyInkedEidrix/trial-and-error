@@ -5,10 +5,6 @@ import CommandPalette from './components/CommandPalette'
 import CustomerForm from './components/records/CustomerForm'
 import ToastStack from './components/toast/ToastStack'
 
-// Chapter 12 rollback drill — intentional production break at module load.
-// This will be reverted immediately after the drill completes.
-throw new Error('Chapter 12 rollback drill — intentional')
-
 export default function App() {
   // Tab state used to live here as useState; it's now in `tabStore`
   // so the palette, future agent tool calls, and any other surface

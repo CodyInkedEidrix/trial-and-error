@@ -23,7 +23,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 - [x] Chapter 10 — Fake Data & Forms
 - [x] Chapter 10.5 — The Adaptable Three-Tier Tab Engine
 - [x] Chapter 11 — Fake Chat UI
-- [ ] Chapter 12 — Deploy It ⭐
+- [x] Chapter 12 — Deploy It ⭐
 
 ### Phase 3 — Going Real
 - [ ] Chapter 13 — Environment Variables
@@ -77,6 +77,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** Chapter 12 — Deploy It ⭐
+**Currently on:** Chapter 13 — Environment Variables
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

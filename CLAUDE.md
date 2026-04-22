@@ -6,6 +6,18 @@ This repo is a self-teaching curriculum called **Trial and Error**. It walks a c
 
 The repo teaches itself: every chapter is a markdown file in `curriculum/` with explicit prompts the student pastes into Claude Code.
 
+## Deployment
+
+**Live URL:** https://trialand-error.netlify.app
+
+**Platform:** Netlify (not Vercel — see below).
+
+**Build model:** Main auto-deploys. Every PR automatically gets a Deploy Preview URL posted by Netlify's GitHub bot. Rollback is done via the Netlify dashboard's "Publish deploy" button on a previous successful deploy (this pins production until new commits arrive on main, which un-pauses auto-deploy).
+
+**Why Netlify and not Vercel:** temporary routing decision, not strategic. A Vercel account-level phone verification issue was unresolved at Chapter 12 shipping time; rather than wait, Trial and Error shipped to Netlify. Once Vercel support resolves the verification, future production work (real Eidrix, and eventually this project if migrated) deploys to Vercel. Both platforms are ~95% interchangeable for deployment mental models — the concepts learned here transfer directly.
+
+**Important for future Claude Code sessions:** when deploying a fix or feature to Trial and Error, the target platform is **Netlify**, not Vercel. Don't create a new Vercel project assuming that's where this lives. The production URL above is the source of truth.
+
 ## CRITICAL: You are a teacher, not an executor
 
 The student using this repo is likely a **complete beginner**. They may have never coded before. They may not know what a terminal is, what React is, what a dependency is, or why there are multiple config files.

@@ -1,12 +1,19 @@
 // ──────────────────────────────────────────────────────────────────────
 // Toast — a single notification pill.
 //
-// Visual style: small, quiet, readable. Not alarming. Variant determines
-// the subtle accent stripe on the left edge — not the whole background,
-// because loud colors on a toast make users anxious.
+// Owns its own auto-dismiss timer so the timer can pause when the user
+// is hovering or focused on the toast. Pause is symmetric: hover OR
+// focus pauses; un-hover AND un-focus resumes with the remaining time.
+//
+// Visual style: small, quiet, readable. Glass background (translucent
+// obsidian + backdrop-blur). Variant determines a subtle accent stripe
+// on the left edge — not the whole background, because loud colors on
+// a toast make users anxious.
 // ──────────────────────────────────────────────────────────────────────
 
-import { motion } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import type { FocusEvent } from 'react'
+import { motion, useReducedMotion } from 'framer-motion'
 import type { Toast as ToastModel, ToastVariant } from '../../lib/toastStore'
 
 interface ToastProps {
@@ -15,8 +22,8 @@ interface ToastProps {
 }
 
 // Accent stripe colors per variant — the only place variant is visually
-// loud. Background stays obsidian-900 across all variants so the stack
-// reads as a unified system.
+// loud. Background stays glass-obsidian across all variants so the
+// stack reads as a unified system.
 const accentByVariant: Record<ToastVariant, string> = {
   info: 'bg-cobalt-500',
   success: 'bg-success-500',
@@ -24,26 +31,91 @@ const accentByVariant: Record<ToastVariant, string> = {
   danger: 'bg-danger-500',
 }
 
-const toastMotion = {
+const fullMotion = {
   initial: { opacity: 0, y: 12, scale: 0.96 },
   animate: { opacity: 1, y: 0, scale: 1 },
   exit: { opacity: 0, y: 12, scale: 0.96 },
-  transition: { duration: 0.24, ease: [0.22, 0.61, 0.36, 1] as [number, number, number, number] },
+  transition: {
+    duration: 0.24,
+    ease: [0.22, 0.61, 0.36, 1] as [number, number, number, number],
+  },
+}
+
+const reducedMotionConfig = {
+  initial: { opacity: 0 },
+  animate: { opacity: 1 },
+  exit: { opacity: 0 },
+  transition: { duration: 0.08 },
 }
 
 export default function Toast({ toast, onDismiss }: ToastProps) {
+  const shouldReduceMotion = useReducedMotion()
+  const [isHovered, setIsHovered] = useState(false)
+  const [isFocused, setIsFocused] = useState(false)
+  const isPaused = isHovered || isFocused
+
+  // Remaining time in ms — counts down across pause/resume cycles.
+  // Initialized once from the toast's full duration; subsequent effect
+  // runs reduce it by elapsed-time-while-running.
+  const remainingRef = useRef(toast.duration)
+
+  // Stash onDismiss in a ref so timer effect doesn't re-run when the
+  // parent passes a new function reference each render.
+  const onDismissRef = useRef(onDismiss)
+  useEffect(() => {
+    onDismissRef.current = onDismiss
+  }, [onDismiss])
+
+  // Auto-dismiss timer. Re-runs when paused/unpaused.
+  // Sticky toasts (duration: 0) skip this entirely.
+  useEffect(() => {
+    if (toast.duration <= 0) return
+    if (isPaused) return
+    if (remainingRef.current <= 0) {
+      onDismissRef.current(toast.id)
+      return
+    }
+
+    const startTime = Date.now()
+    const timer = setTimeout(() => {
+      onDismissRef.current(toast.id)
+    }, remainingRef.current)
+
+    return () => {
+      clearTimeout(timer)
+      // Subtract elapsed-while-running from remaining so the next
+      // resume picks up where we left off.
+      const elapsed = Date.now() - startTime
+      remainingRef.current = Math.max(0, remainingRef.current - elapsed)
+    }
+  }, [isPaused, toast.duration, toast.id])
+
+  // Focus-within tracking: only un-set isFocused when focus leaves the
+  // toast entirely, not when it moves between buttons inside.
+  function handleBlur(e: FocusEvent<HTMLDivElement>) {
+    if (!e.currentTarget.contains(e.relatedTarget as Node | null)) {
+      setIsFocused(false)
+    }
+  }
+
   const handleAction = () => {
     if (!toast.action) return
     toast.action.onClick()
     onDismiss(toast.id)
   }
 
+  const motionProps = shouldReduceMotion ? reducedMotionConfig : fullMotion
+
   return (
     <motion.div
       layout
-      {...toastMotion}
+      {...motionProps}
       role="status"
       aria-live="polite"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onFocus={() => setIsFocused(true)}
+      onBlur={handleBlur}
       className="relative flex items-center gap-3 min-w-[280px] max-w-[420px] bg-obsidian-900/65 backdrop-blur-md border border-obsidian-700/60 rounded-md pl-4 pr-3 py-2.5 shadow-[0_8px_28px_rgba(0,0,0,0.5)] overflow-hidden"
     >
       {/* Left accent stripe */}
@@ -75,7 +147,7 @@ export default function Toast({ toast, onDismiss }: ToastProps) {
         </button>
       )}
 
-      {/* Dismiss X — fires `onDismiss` hook so callers can commit
+      {/* Dismiss × — fires `onDismiss` hook so callers can commit
           deferred intent (e.g., finalize a pending delete). */}
       <button
         type="button"

@@ -1,13 +1,13 @@
 // ──────────────────────────────────────────────────────────────────────
 // Toast store — generic notification system (AC-14 scope, absorbed into
-// Chapter 10 because the undo-delete pattern needs it).
+// Chapter 10).
 //
 // Anything in the app can `push()` a toast with a variant, title, and
-// optional action button. The store handles auto-dismiss timing and
-// cleanup; <ToastStack /> renders whatever's currently in the store.
-//
-// Zero coupling to customers — this lives alongside future features
-// (save confirmations, error reports, agent action updates).
+// optional action button. The store holds the list and exposes
+// dismiss/clear; auto-dismiss timing is handled inside each Toast
+// component (so the timer can pause on hover/focus). This separation
+// keeps the store pure UI-state and lets the visual layer own the
+// "when to dismiss" decision based on user interaction.
 // ──────────────────────────────────────────────────────────────────────
 
 import { create } from 'zustand'
@@ -42,9 +42,6 @@ export type ToastInput = Omit<Toast, 'id' | 'variant' | 'duration'> &
 
 interface ToastStore {
   toasts: Toast[]
-  /** Dismiss timers — kept outside `toasts` so they aren't part of render state. */
-  _timers: Record<string, ReturnType<typeof setTimeout>>
-
   push: (input: ToastInput) => string
   dismiss: (id: string) => void
   clear: () => void
@@ -56,9 +53,8 @@ function toastId(): string {
   return `toast-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
-export const useToastStore = create<ToastStore>((set, get) => ({
+export const useToastStore = create<ToastStore>((set) => ({
   toasts: [],
-  _timers: {},
 
   push: (input) => {
     const id = toastId()
@@ -71,34 +67,13 @@ export const useToastStore = create<ToastStore>((set, get) => ({
       onDismiss: input.onDismiss,
       duration: input.duration ?? DEFAULT_DURATION,
     }
-
     set((prev) => ({ toasts: [...prev.toasts, toast] }))
-
-    if (toast.duration > 0) {
-      const timerId = setTimeout(() => get().dismiss(id), toast.duration)
-      set((prev) => ({ _timers: { ...prev._timers, [id]: timerId } }))
-    }
-
     return id
   },
 
   dismiss: (id) => {
-    const timers = get()._timers
-    if (timers[id]) {
-      clearTimeout(timers[id])
-    }
-    set((prev) => {
-      const { [id]: _removed, ...restTimers } = prev._timers
-      return {
-        toasts: prev.toasts.filter((t) => t.id !== id),
-        _timers: restTimers,
-      }
-    })
+    set((prev) => ({ toasts: prev.toasts.filter((t) => t.id !== id) }))
   },
 
-  clear: () => {
-    const timers = get()._timers
-    Object.values(timers).forEach(clearTimeout)
-    set({ toasts: [], _timers: {} })
-  },
+  clear: () => set({ toasts: [] }),
 }))

@@ -69,3 +69,50 @@ body::before {
 .eidrix-row-flash {
   animation: eidrix-row-flash 850ms ease-out both;
 }
+
+/* ───────────────────────────────────────────────────────────────
+   Eidrix scrollbar — thin molten-ember thumb, transparent track.
+   Applied selectively via .eidrix-scrollbar so the rest of the app
+   keeps its defaults unless we opt in. Molten gradient (ember-700
+   → ember-500) on the thumb, brighter + subtle glow on hover.
+   ─────────────────────────────────────────────────────────────── */
+
+.eidrix-scrollbar {
+  /* Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(178, 77, 0, 0.55) transparent;
+}
+
+.eidrix-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.eidrix-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.eidrix-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(
+    180deg,
+    rgba(178, 77, 0, 0.55) 0%,
+    rgba(255, 107, 26, 0.55) 100%
+  );
+  border-radius: 999px;
+  transition:
+    background 160ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+.eidrix-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(
+    180deg,
+    rgba(178, 77, 0, 0.9) 0%,
+    rgba(255, 107, 26, 0.9) 100%
+  );
+  box-shadow: 0 0 6px rgba(255, 107, 26, 0.45);
+}
+
+.eidrix-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}

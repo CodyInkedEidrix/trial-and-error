@@ -31,6 +31,7 @@ Future chapters in this folder might cover:
 
 - **[AC-01 — Streaming Chat Foundation](ac-01-streaming-chat-foundation.md)** ⭐ — The first real-AI chapter. Replace the Chapter 11 canned responses with live streaming Claude via Anthropic's Messages API, routed through a Netlify Function so the API key stays server-side. Covers Server-Sent Events, client-side stream consumption, incremental React state updates, system-prompt-as-product-voice, and the full error-handling matrix (network failure, rate limit, mid-stream interruption). Wires Eye reactions to real AI events instead of timers. Foundation every later AI chapter (AC-02, AC-03, AC-04, AC-05, AC-16) builds on. ~3.5 hours. Requires Ch 11, Ch 13.
 - **[AC-02 — Context-Aware Chat](ac-02-context-aware-chat.md)** — The chapter where Eidrix stops being generic and starts knowing your business. Adds Jobs as a second entity (relational to Customers), wires context injection (Off / Smart Subset / Full modes) so the AI reasons across the relationship, builds an Agent Debug tab that surfaces exactly what Claude sees each request (system prompt, messages, tokens, response time, cumulative cost), and moves Settings out of hardcoded function code into a Supabase-backed per-org `agent_settings` table. Bumps the default model to Sonnet 4.6. Validates Chapter 10.5's engine pattern at scale — Jobs and Debug tabs both render from BusinessConfig alone, no shell edits. ~5 hours, the biggest AC chapter so far. Requires AC-01, Ch 14.
+- **[AC-03 — Agentic Foundation](ac-03-agentic-foundation.md)** ⭐⭐ — The agentic moment. The longest chapter in the curriculum (~8-10 hours across two sessions). Adds Proposals as a third relational entity (Customer → Job → Proposal), defines ~15-18 tools across Customers/Jobs/Proposals, builds the server-side tool execution loop in chat.ts (parallel calls, RLS-respected auth, max-iteration cap, structured error handling), injects UI context so Eidrix knows which tab / record / section the user is looking at, gates destructive actions behind inline confirmation rendered in the chat stream, refreshes affected stores live when the agent mutates data, and upgrades the Agent Debug tab to a full readable trace of every tool call in the loop. Structured as Session 1 (foundation: Proposals + tools + raw loop) and Session 2 (agentic behavior: UI context, confirmation, live refresh, trace UI, ambiguity tuning). After this chapter, Eidrix is real. Requires AC-02, Ch 14.
 - **[AC-06 — Command Palette (cmd+K)](ac-06-command-palette.md)** — Build a Linear/Raycast-style command palette with cmd+K/ctrl+K trigger, fuzzy search, and a typed action system. First App Capability chapter, and the pattern foundation for AC-03 (Agentic Foundation) later. ~90 min. Requires Ch 8.
 - **[AC-08a — The Eidrix Eye](ac-08a-eidrix-eye.md)** — The signature chapter. Build the Eidrix Eye — a living animated SVG component with six animation layers, four states (Idle / Thinking / Speaking / Muted), and seven reactions. Mounts at 24px in the chat column header and 240px in a new Brand tab. Config-driven so AC-08b's tuning playground drops in cleanly. ~4 hours. Requires Ch 9.
 - **[AC-08b — The Eidrix Eye Tuning Playground](ac-08b-eye-tuning-playground.md)** — Companion to AC-08a. Transform the Brand tab into a full design instrument: preset bar, live sliders for every Eye parameter, three-size side-by-side preview, live TypeScript code export, custom preset save. Same pattern as Motion Lab v2. ~3 hours. Requires AC-08a.
@@ -39,19 +40,6 @@ Future chapters in this folder might cover:
 ## Planned chapters
 
 Chapters scheduled in the [locked execution order](../CURRICULUM_DESIGN.md) but not yet written. Scope captured here so forward-references and future work have a single source of truth until the chapter markdown lands.
-
-### AC-03 — Agentic Foundation ⭐⭐ *(not yet written)*
-
-**The agentic moment — the largest chapter in the curriculum (~8-10 hours).** Consolidates multiple pieces that don't meaningfully work in isolation:
-
-- **Tool calling** — Claude can CREATE / UPDATE / DELETE customers, jobs, and proposals via natural language. *"Add John Smith, 555-1234"* → new row appears. *"Mark Al's proposal as approved"* → status changes.
-- **Proposals entity** — introduced here as the third relational entity (Customer → Job → Proposal), proving the entity template repeats cleanly a third time.
-- **UI context awareness** — beyond Customer/Job data injection from AC-02, the agent now knows which primary tab the user is viewing, which record is open, which filter is active. Context injection extends across all primary tabs.
-- **Ambiguity resolution** — when the agent isn't sure which customer "John" refers to, or whether a request should create new vs update existing, it surfaces a clarification. Inline patterns: *"I found two Johns — do you mean..."*
-- **Inline confirmation UI** — destructive actions (delete, bulk update) require user confirmation rendered directly in the chat rather than as a separate modal.
-- **Agent Debug tab full-trace upgrade** — beyond per-request logging (AC-02), traces the full tool-calling loop: which tools the agent considered, which it invoked, which arguments it passed, what each returned.
-
-Depends on AC-02, Chapter 14.
 
 ### AC-05 — Multi-Turn Agentic Loops *(not yet written)*
 

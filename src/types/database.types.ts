@@ -255,6 +255,41 @@ export type Database = {
           },
         ]
       }
+      memory_fact_embeddings: {
+        Row: {
+          created_at: string
+          embedding: string
+          fact_id: string
+          id: string
+          model_version: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          embedding: string
+          fact_id: string
+          id?: string
+          model_version: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          embedding?: string
+          fact_id?: string
+          id?: string
+          model_version?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memory_fact_embeddings_fact_id_fkey"
+            columns: ["fact_id"]
+            isOneToOne: true
+            referencedRelation: "memory_facts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       memory_facts: {
         Row: {
           confidence: number
@@ -457,6 +492,22 @@ export type Database = {
     }
     Functions: {
       is_member_of: { Args: { target_org: string }; Returns: boolean }
+      match_memory_facts: {
+        Args: {
+          match_count?: number
+          query_embedding: string
+          user_id_filter?: string
+        }
+        Returns: {
+          confidence: number
+          content: string
+          entity_id: string
+          entity_type: string
+          fact_id: string
+          fact_type: Database["public"]["Enums"]["fact_type"]
+          similarity: number
+        }[]
+      }
     }
     Enums: {
       agent_model:

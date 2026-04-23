@@ -32,6 +32,11 @@ import {
   validateEntityInRegistry,
   type RegistryEntry,
 } from './entityRegistry'
+import {
+  embeddingToVectorParam,
+  generateEmbedding,
+  isEmbedSuccess,
+} from './embed'
 
 // ─── Constants ───────────────────────────────────────────────────────
 
@@ -412,11 +417,69 @@ export async function extractFactsForMessage(
     confidence: f.confidence,
   }))
 
-  const { error: insertErr } = await supabase.from('memory_facts').insert(rows)
-  if (insertErr) {
+  // Return the inserted rows so we can embed them immediately.
+  const { data: inserted, error: insertErr } = await supabase
+    .from('memory_facts')
+    .insert(rows)
+    .select('id, content')
+
+  if (insertErr || !inserted) {
     console.error('[extractFacts] insert failed:', insertErr)
-    return { status: 'error', factsCreated: 0, reason: insertErr.message }
+    return {
+      status: 'error',
+      factsCreated: 0,
+      reason: insertErr?.message ?? 'insert returned no rows',
+    }
   }
 
-  return { status: 'facts_extracted', factsCreated: rows.length }
+  // ─── Generate embeddings for each new fact ─────────────────────────
+  // Session 2 addition. Runs in parallel per fact; failures are logged
+  // but don't abort — the fact still exists in memory_facts and can
+  // be re-embedded later (e.g., by an edit + save, or a future
+  // backfill job).
+  //
+  // "content is source of truth, embeddings are cache" — if this
+  // step fails, we still want the fact persisted.
+  const embedResults = await Promise.all(
+    inserted.map(async (row) => {
+      const embed = await generateEmbedding(row.content, 'document')
+      if (!isEmbedSuccess(embed)) {
+        console.warn(
+          `[extractFacts] embedding failed for fact ${row.id}:`,
+          embed.error,
+        )
+        return { fact_id: row.id, ok: false }
+      }
+      // Upsert (not insert) for symmetry with reembed-fact-background:
+      // if an edit fires a reembed while extraction is still running
+      // for the same fact, the winner is whichever call lands last.
+      // Both produce correct vectors for the current content — upsert
+      // makes either order idempotent without a unique-violation race.
+      const { error: embedInsertErr } = await supabase
+        .from('memory_fact_embeddings')
+        .upsert(
+          {
+            fact_id: row.id,
+            embedding: embeddingToVectorParam(embed.embedding),
+            model_version: embed.model,
+          },
+          { onConflict: 'fact_id' },
+        )
+      if (embedInsertErr) {
+        console.warn(
+          `[extractFacts] embedding insert failed for fact ${row.id}:`,
+          embedInsertErr.message,
+        )
+        return { fact_id: row.id, ok: false }
+      }
+      return { fact_id: row.id, ok: true }
+    }),
+  )
+
+  const embeddedCount = embedResults.filter((r) => r.ok).length
+  return {
+    status: 'facts_extracted',
+    factsCreated: rows.length,
+    reason: `embedded ${embeddedCount}/${rows.length}`,
+  }
 }

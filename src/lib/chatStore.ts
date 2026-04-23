@@ -586,6 +586,16 @@ interface StreamEvent {
   hitIterationCap?: boolean
   uiContext?: UiContext | null
   affectedEntities?: string[]
+  // AC-04 Session 2
+  retrievedMemories?: Array<{
+    fact_id: string
+    content: string
+    fact_type: string
+    entity_type: string | null
+    entity_id: string | null
+    confidence: number
+    similarity: number
+  }>
 }
 
 /**
@@ -625,6 +635,16 @@ function buildDebugEntry(
     hitIterationCap: usageEvent?.hitIterationCap ?? false,
     uiContext: usageEvent?.uiContext ?? null,
     affectedEntities: usageEvent?.affectedEntities ?? [],
+    // Map snake_case from the server RPC to camelCase for client use.
+    retrievedMemories: (usageEvent?.retrievedMemories ?? []).map((m) => ({
+      factId: m.fact_id,
+      content: m.content,
+      factType: m.fact_type,
+      entityType: m.entity_type,
+      entityId: m.entity_id,
+      confidence: m.confidence,
+      similarity: m.similarity,
+    })),
   }
 }
 

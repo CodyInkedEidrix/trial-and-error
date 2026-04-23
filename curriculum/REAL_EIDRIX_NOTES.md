@@ -64,16 +64,58 @@ Structure:
 
 ## Memory Architecture (Agent Memory)
 
-**Locked decisions:**
+**Locked decisions (AC-04):**
+
+*Persistence layer:*
 - **Chat messages are durable** — every conversation is saved, nothing ephemeral
-- **Hybrid memory pattern** — chat messages persist in Postgres (audit, replay, compliance), semantic recall lives in a vector store (retrieval, "what did we talk about Tuesday")
-- **Never put chat messages through a volatile memory system alone** — durability wins over elegance
+- **Two message roles, not four** (`user` / `assistant`). Tool interactions live in `messages.metadata.toolCalls` (jsonb) rather than as separate `tool_call` / `tool_result` rows. Keeps row counts predictable, keeps fact-extraction targets clean (only user + assistant text is ever extracted from), aligns with how Anthropic's API already bundles tool_use blocks inside assistant messages.
+- **`conversation_id` is a real UUID** with a `conversations` row, not a magic string. One conversation auto-upserted per user-org on sign-in. Multi-conversation UI (create, name, switch) is deferred — schema supports it today, UI layer doesn't expose it yet.
+- **User-scoped RLS reads** on `messages`, `conversations`, `memory_facts`, `memory_fact_embeddings`. A member of an org can NOT read another member's conversation history or memories, even if they share the org. Privacy-first default. Real Eidrix will eventually expose this as a per-tenant setting — small businesses with shared operational memory may opt in to org-scoped reads; professional-services tenants (legal, accounting) keep strict isolation.
+- **`WITH CHECK` clauses on all UPDATE policies** (hardening migration) so a user can't mutate their own row's `organization_id` / `user_id` to values outside their membership.
+
+*Extraction layer:*
+- **Extract signal, don't embed raw messages.** Messages are noisy — chat + small talk + signal mixed. Extracting typed facts (preference / rule / context / commitment / observation) from each user turn gives retrieval a high-SNR surface. See AC-04 chapter's "layered memory" tour moment.
+- **Haiku 4.5 as the extraction model.** Structured-output pattern-matching task, not reasoning. ~3× cheaper than Sonnet, fast enough for background work. Verified on the 8-message stress battery; flip to Sonnet only if a future quality regression demands it.
+- **Two-tool structured output** — `record_fact` and `no_facts_found` under `tool_choice: any`. Forces a decisive output every turn; no JSON-parse fragility, no ambiguous text responses. Either one-or-more `record_fact` calls OR exactly one `no_facts_found`.
+- **`-background.ts` Netlify function for extraction**, fired from the client after the assistant turn persists. Netlify queues background functions independently (15-min budget); naive fire-and-forget to a regular function is NOT safe on serverless. Real Eidrix graduates to a proper queue (Inngest / Trigger.dev / pg-cron work queue) at ~tens of thousands of daily extractions for observable retry + dead-letter handling.
+- **Guardrails**: confidence ≥ 0.6 required, max 3 facts per message, exact-content dedupe against existing active facts. AbortController cancels the Anthropic call on an 8s timeout. Dedupe runs BEFORE the 3-fact cap so unique-on-top-of-duplicates survives.
+- **Entity registry compiled from customers/jobs/proposals** and passed to the extraction prompt — resolves "Alice" → `entity_id` at extraction time. Invalid or unmatched names become `entity_id: null` rather than hallucinated IDs.
+
+*Embedding + retrieval layer (Session 2):*
+- **pgvector + Supabase, not a separate vector DB.** Everything in one Postgres. Lower ops burden, same consistency story, no data-movement between systems, RLS still applies.
+- **Separate `memory_fact_embeddings` table** (not a column on `memory_facts`). Chapter-locked design for independence: embeddings are a cache; you can truncate the embeddings table and re-derive from `memory_facts.content`. You cannot do the reverse.
+- **Voyage-3 as the embedding provider**, 1024 dims. Anthropic-aligned partner, free tier is plenty for early scale (~200M tokens), $0.02 per 1M tokens afterwards. `model_version` column tracks which model produced each row so provider / model switches become a backfill job rather than a data migration.
+- **"Content is source of truth; embeddings are cache"** — locked principle. `memory_facts.content` stays plain text in Postgres forever. Losing embeddings is recoverable in a batch job; losing content isn't.
+- **HNSW index** (not ivfflat) with `vector_cosine_ops`. Slower to build, faster to query; correct tradeoff for a workload that embeds on-write and queries on-read.
+- **`match_memory_facts` RPC** with `security_invoker` + `user_id_filter` param — RLS is enforced AND an explicit user-id gate at the call site (defense in depth). Returns similarity as `1 - cosine_distance` for intuitive 0-1 scoring.
+- **Top-K = 8** as the retrieval default. Hardcoded for Trial and Error; real Eidrix exposes it per-tenant and potentially auto-tunes based on memory density.
+- **Retrieval injected as a new prompt layer** between workspace overview and business data. Grouped by fact_type for Claude's reading order (preferences + rules first, then commitments, context, observations). Empty retrieval omits the block entirely — fresh users don't see a meaningless placeholder.
+- **`input_type: 'document'` vs `'query'`** at Voyage call time — stored facts are documents, incoming user messages are queries. ~5-10% retrieval quality lift for one field in the API call.
+- **Re-embed on edit**, fire-and-forget via a dedicated `/reembed-fact-background` function. Memory UI saves content → store updates optimistically → background function regenerates the embedding.
+
+*UI + observability:*
+- **Memory UI in Settings is the trust surface.** Users see every fact, can search, filter, edit (triggers re-embed), forget (soft delete with confirmation), and export (JSON download). Transparency makes memory collaboration; without it, memory becomes surveillance. GDPR / CCPA compliance is mostly handled by this UI.
+- **Debug tab retrieval trace** with similarity score + color-coded relevance + "used" badge (4+ consecutive words of fact content found in response text). Answers "did Claude actually use the memory I expected?" per turn.
+- **Soft delete, not hard delete.** `is_active = false` excludes a fact from retrieval + UI but preserves the row for audit / undo scenarios. Hard delete via a permanent-delete flow is deferred to real Eidrix.
+
+**Deferred to real-Eidrix work (NOT built in AC-04):**
+- **Fact decay** — weighting old facts lower over time. Needs real usage data to calibrate the decay curve.
+- **Conflict resolution** — when "Alice prefers mornings" and "Alice prefers afternoons" both exist as active facts, what does retrieval surface? Today: both. Real Eidrix: either pin a "canonical" winner via user action, or let retrieval present both and let Claude reason.
+- **Implicit retraction** — a fact not reinforced in N months might be stale even if never explicitly contradicted. Needs a scoring model, not just age-based decay.
+- **Entity dissolution cleanup** — when a customer is deleted, what happens to their facts? Today: facts remain, display shows `(deleted)`. Real Eidrix: either cascade-soft-delete, or keep as historical — tenant-configurable.
+- **Cross-user memory in the same org** — per-tenant setting (mentioned above). Some orgs want shared operational memory; professional services keep strict isolation.
+- **Cross-tenant learning** — aggregating "most contractors prefer morning callbacks" across tenants. Privacy question; probably never.
+- **Proactive memory surfacing** — "You mentioned Alice's birthday last month; it's next Tuesday." Active push, not just retrieve-on-query.
+- **Graph relationships between facts** — "Bob's kitchen job requires morning schedule → Bob is seasonal → schedule around his wife's flight schedule" as connected triples. Today facts are flat; real Eidrix may graduate to a lightweight knowledge graph.
+- **Semantic dedupe at write time** — today's dedupe is exact-content-match. Real dedupe: "User prefers morning callbacks" and "Prefers mornings for callbacks" should collapse.
+- **Paging in the Memory UI** — all facts load today (fine at ≤ 1k facts; real Eidrix at 10k+ per user needs virtualization + server-side pagination).
+- **Background function → proper queue** graduation — Netlify `-background` is production-grade for moderate scale; at tens of thousands of daily extractions, queue-with-retry wins.
+- **Conversation naming + multi-conversation UI** — schema supports it; real Eidrix ships the UI when multi-session use cases justify it.
 
 **Open questions:**
-- Which vector store: Supabase pgvector (same database), Pinecone, Turbopuffer, something else?
-- Memory scope: per-user? per-organization? cross-organization (the user running multiple workspaces)?
-- Memory decay — does old context fade or stay sharp indefinitely?
-- Memory injection: always include recent context, or retrieve on-demand by semantic similarity?
+- What's the right Top-K for real-Eidrix tenants? Empirical question, needs real usage data. Default 8 is a starting point.
+- At what tenant size does hnsw on pgvector stop performing well? Probably 1M+ facts per tenant; flag for monitoring.
+- Memory staleness policy — when do we start scoring down? Needs product decision + usage signal.
 
 ---
 
@@ -338,3 +380,5 @@ The signature onboarding flow for real Eidrix. Deserves its own section because 
 - **April 23, 2026** — AC-03 Session 1 (Agentic Foundation) shipped. Proposals entity added as the third rep of the Customer/Job template. 18 tools defined across customers/jobs/proposals + a general summarizeForCustomer. Server-side tool execution loop in `chat.ts` with streaming forward (text events) and buffered tool_use events. MAX_ITERATIONS=10 cap. DEFAULT_CONTEXT_MODE flipped to 'off' — with tools available, on-demand discovery beats preloaded data at scale. Client-side refresh after tool calls.
 - **April 23, 2026** — AC-03 Session 2 (Agentic Behavior Layer) shipped. UI context injection (snapshotUiContext + prompt block between base prompt and data). Cryptographic HMAC confirmation tokens for destructive tools (not a `confirmed: boolean` flag — server-enforced two-phase commit so LLM cooperation isn't the security boundary). Inline Confirm/Cancel card in chat, resolved state preserved as audit trail. Targeted refresh via `affectedEntities` from the function — read-only turns cost zero refetches. Hardening layer: input validation (email/phone/amount/length/UUID), result size caps (100 default, 50 nested, 20 fuzzy), destructive-commit rate cap (3/request), structured tool-error visibility in chat. Agent Debug tab upgraded with UI-context grid and full tool-trace timeline. AC-03 complete.
 - **April 23, 2026** — Ambient workspace overview shipped as a follow-up. Always-on aggregate block (customer/job/proposal counts by status) injected into the system prompt regardless of `context_mode`. O(1) in tenant size. Fixes the "off mode is flying blind" problem without compromising the tools-fetch-row-data discipline. Introduced the Layered Context Model in this document — reframes context injection from a 3-way toggle to a stack of layers, each independently sized and toggleable.
+- **April 23, 2026** — AC-04 Session 1 (Persistence + fact extraction) shipped. Every chat message now persists to Postgres (`messages` + `conversations` tables with user-scoped RLS). Claude-driven fact extraction runs as a Netlify `-background.ts` function after each user turn — loads the message + 3 prior for context, compiles an entity registry from customers/jobs/proposals for name resolution, calls Haiku 4.5 with two tools (record_fact / no_facts_found under tool_choice:any), validates (confidence ≥ 0.6, max 3, dedupe), inserts into `memory_facts`. UX overlays (pendingAction, toolErrors) now persist in message metadata so they survive future multi-conversation resync. Hardening migration added `WITH CHECK` clauses to all three tables' UPDATE policies.
+- **April 23, 2026** — AC-04 Session 2 (Embeddings + retrieval + Memory UI) shipped, completing AC-04. pgvector + `memory_fact_embeddings` table with hnsw cosine-distance index and a `match_memory_facts` RPC (security_invoker + user_id filter). Voyage-3 as the embedding provider with the "content as source of truth, embeddings are cache" escape-hatch principle. Hybrid retrieval at chat time injects top-K=8 semantically-relevant facts as a new prompt layer (grouped by fact_type, empty retrieval omits the block). Memory UI in Settings for full transparency — search, filter, edit (fires re-embed), soft-delete with confirmation, JSON export. Debug tab got a memory section with similarity color-coding + "used-in-response" heuristic badge. Eidrix now has durable cross-session memory; the substrate for real Eidrix's long-term tenant defensibility is complete.

@@ -16,7 +16,12 @@
 
 import { useState } from 'react'
 
-import { useDebugStore, type DebugEntry, type ToolCallEntry } from '../../lib/debugStore'
+import {
+  useDebugStore,
+  type DebugEntry,
+  type RetrievedMemoryEntry,
+  type ToolCallEntry,
+} from '../../lib/debugStore'
 import { MODEL_META, type ContextMode } from '../../types/agentSettings'
 
 /** Pill colors for the context-mode badge. Off is muted, subset is
@@ -255,6 +260,20 @@ function DebugEntryRow({ entry }: { entry: DebugEntry }) {
             </DetailSection>
           )}
 
+          {/* Retrieved memories (AC-04 Session 2) — facts the hybrid
+              retrieval layer pulled in for this turn. Empty array for
+              fresh users, short messages, or no-match queries. */}
+          {entry.retrievedMemories.length > 0 && (
+            <DetailSection
+              title={`Retrieved memories (${entry.retrievedMemories.length})`}
+            >
+              <MemoryTrace
+                memories={entry.retrievedMemories}
+                responseText={entry.responseText}
+              />
+            </DetailSection>
+          )}
+
           {/* Messages array */}
           <DetailSection title={`Messages array (${entry.messagesSent.length})`}>
             <div className="space-y-2">
@@ -436,6 +455,100 @@ function ToolCallRow({ call }: { call: ToolCallEntry }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ─── Memory trace (AC-04 Session 2) ──────────────────────────────────
+// Renders retrieved facts as a ranked table with similarity color
+// coding. Heuristic: if a consecutive ≥4-word phrase from the fact
+// content appears in the response text, mark the fact as "used" so
+// the user can see which memories Claude actually paraphrased.
+
+function similarityBadge(sim: number): { color: string; label: string } {
+  if (sim >= 0.7) return { color: 'text-success-500', label: 'high' }
+  if (sim >= 0.5) return { color: 'text-ember-300', label: 'med' }
+  if (sim >= 0.3) return { color: 'text-ember-700', label: 'low' }
+  return { color: 'text-text-tertiary', label: 'weak' }
+}
+
+/** Strip punctuation and collapse whitespace so "before 10am." tokenizes
+ *  identically to "before 10am," and "10am" — otherwise trailing dots
+ *  and commas would cause false negatives on obvious paraphrases. */
+function tokenizeForMatch(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .split(/\s+/)
+    .filter((w) => w.length > 2)
+}
+
+function factWasReferenced(fact: string, response: string): boolean {
+  if (!response) return false
+  const factTokens = tokenizeForMatch(fact)
+  if (factTokens.length < 4) return false
+  const responseTokens = new Set<string>()
+  const rt = tokenizeForMatch(response)
+  // Build a set of 4-grams from the response for O(1) window check.
+  for (let i = 0; i <= rt.length - 4; i++) {
+    responseTokens.add(rt.slice(i, i + 4).join(' '))
+  }
+  // Any fact 4-gram present in the response → paraphrase-level reuse.
+  for (let i = 0; i <= factTokens.length - 4; i++) {
+    const window = factTokens.slice(i, i + 4).join(' ')
+    if (responseTokens.has(window)) return true
+  }
+  return false
+}
+
+function MemoryTrace({
+  memories,
+  responseText,
+}: {
+  memories: RetrievedMemoryEntry[]
+  responseText: string
+}) {
+  return (
+    <div className="space-y-1">
+      {memories.map((m) => {
+        const { color, label } = similarityBadge(m.similarity)
+        const referenced = factWasReferenced(m.content, responseText)
+        return (
+          <div
+            key={m.factId}
+            className={`grid grid-cols-[60px_52px_1fr_auto] items-start gap-3 rounded-sm border px-3 py-2 ${
+              referenced
+                ? 'border-success-500/30 bg-success-500/5'
+                : 'border-obsidian-800 bg-obsidian-950'
+            }`}
+          >
+            <span className={`font-mono text-[11px] tabular-nums ${color}`}>
+              {m.similarity.toFixed(2)}
+            </span>
+            <span className={`font-mono text-[10px] uppercase ${color}`}>
+              {label}
+            </span>
+            <div className="min-w-0">
+              <p className="font-mono text-[12px] text-text-primary whitespace-normal break-words">
+                {m.content}
+              </p>
+              <p className="font-mono text-[10px] text-text-tertiary mt-0.5">
+                {m.factType}
+                {m.entityType && m.entityId
+                  ? ` · ${m.entityType} ${m.entityId.slice(0, 8)}…`
+                  : ''}
+                {' · confidence '}
+                {m.confidence.toFixed(2)}
+              </p>
+            </div>
+            {referenced && (
+              <span className="font-mono text-[10px] uppercase tracking-wider text-success-500">
+                used
+              </span>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

@@ -29,6 +29,41 @@ import { supabase } from './supabase'
 import { useAuthStore } from './useAuth'
 import { useToastStore } from './toastStore'
 
+/** Fire the re-embed background function for a fact whose content
+ *  changed. Fire-and-forget: the UI update stays instant; the
+ *  embedding refresh happens after. `-background` suffix guarantees
+ *  Netlify queues it independently.
+ *
+ *  Silent on failure (logged) — the fact is still persisted, the
+ *  retrieval layer just uses the stale embedding until a later edit
+ *  or a backfill job. "Content is source of truth." */
+async function fireReembedFact(factId: string) {
+  try {
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData?.session?.access_token
+    if (!accessToken) {
+      console.warn('[memoryStore] skipping reembed: no access token')
+      return
+    }
+    void fetch('/.netlify/functions/reembed-fact-background', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${accessToken}`,
+      },
+      body: JSON.stringify({ factId }),
+    })
+      .then((res) => {
+        if (res.status === 401 || res.status === 403) {
+          console.warn('[memoryStore] reembed auth rejected:', res.status)
+        }
+      })
+      .catch((err) => console.warn('[memoryStore] reembed dispatch failed:', err))
+  } catch (err) {
+    console.warn('[memoryStore] reembed setup failed:', err)
+  }
+}
+
 type DbFactRow = Database['public']['Tables']['memory_facts']['Row']
 type DbFactInsert = Database['public']['Tables']['memory_facts']['Insert']
 type DbFactUpdate = Database['public']['Tables']['memory_facts']['Update']
@@ -53,6 +88,9 @@ export interface MemoryStore {
   softDelete: (id: string) => Promise<void>
 
   clearLocalState: () => void
+
+  /** Serialize active facts as JSON for the Memory UI's export button. */
+  exportToJson: () => string
 }
 
 // ─── DB ↔ App mapping ────────────────────────────────────────────────
@@ -199,6 +237,14 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
     set((state) => ({
       facts: state.facts.map((f) => (f.id === id ? reconciled : f)),
     }))
+
+    // Content changed → re-embed in the background so semantic
+    // retrieval uses the updated phrasing. Fire-and-forget; the
+    // existing embedding works fine in the meantime (the old
+    // phrasing is still semantically close to the new one).
+    if (patch.content !== undefined && patch.content !== previous.content) {
+      void fireReembedFact(id)
+    }
   },
 
   softDelete: async (id) => {
@@ -226,6 +272,29 @@ export const useMemoryStore = create<MemoryStore>((set, get) => ({
 
   clearLocalState: () => {
     set({ facts: [], isLoading: false, loadError: null })
+  },
+
+  /** Serialize all active facts as a JSON blob for the user's download.
+   *  Includes only the fields a user would want to keep — internal
+   *  ids (organization_id, user_id) and the source_message_id audit
+   *  link are omitted for privacy. GDPR-flavored trust gesture. */
+  exportToJson: () => {
+    const facts = get().facts
+    const payload = {
+      exportedAt: new Date().toISOString(),
+      count: facts.length,
+      facts: facts.map((f) => ({
+        id: f.id,
+        content: f.content,
+        fact_type: f.factType,
+        entity_type: f.entityType ?? null,
+        entity_id: f.entityId ?? null,
+        confidence: f.confidence,
+        created_at: f.createdAt,
+        updated_at: f.updatedAt,
+      })),
+    }
+    return JSON.stringify(payload, null, 2)
   },
 }))
 

@@ -1,35 +1,38 @@
 // ──────────────────────────────────────────────────────────────────────
-// chat — context-aware streaming AI completion (AC-02).
+// chat — agentic streaming AI completion (AC-03 Session 1).
 //
-// Flow per request:
-//   1. Validate JWT from Authorization header (no JWT = 401)
-//   2. Create per-request Supabase client with that JWT — RLS applies
-//   3. Find the user's active organization (single-membership for now)
-//   4. Load agent_settings for that org (lazy-upsert defaults if missing)
-//   5. Branch on context_mode:
-//        'off'    → no data injection
-//        'subset' → recent customers + open jobs
-//        'full'   → all customers + all jobs
-//   6. Format business data as STRUCTURED text (not prose) for Claude
-//   7. Build final system prompt = settings.system_prompt + context
-//   8. Stream from Anthropic with the configured model
-//   9. Forward all SSE events + emit a final 'usage' event with stats
+// Extends AC-02 with tool calling. The function now orchestrates a
+// back-and-forth with Claude: Claude emits tool_use blocks, we execute
+// those tools server-side against Supabase (with the user's JWT so RLS
+// applies), we append tool_result blocks to the messages array, and
+// we loop until Claude stops calling tools.
 //
-// ─── Why JWT-pass-through (not service role) ──────────────────────────
-// We could use SUPABASE_SERVICE_ROLE_KEY to bypass RLS and fetch any
-// row freely — faster, simpler. Rejected: a single bug in our query
-// (forgetting an organization_id filter) would leak cross-tenant data.
-// Forwarding the user's JWT means RLS enforces tenant isolation at the
-// database layer, and any code bug becomes a "zero rows returned"
-// error rather than a data leak. Defense in depth.
+// ─── Event forwarding strategy ────────────────────────────────────────
+// The browser sees ONE continuous assistant message even though
+// server-side there may be multiple Anthropic round trips. We achieve
+// this by filtering events:
+//   - Text events (content_block_start/delta/stop for text blocks) flow
+//     through to the client across every iteration.
+//   - Tool-use events stay server-side (the client doesn't need to see
+//     them for Session 1 — they're captured in the final eidrix_usage
+//     event so the Debug tab can display the full trace).
+//   - message_start is emitted ONCE (iteration 1 only).
+//   - message_stop is emitted ONCE at the very end.
+//   - message_delta's stop_reason is handled server-side; we don't
+//     forward it mid-loop.
 //
-// ─── Why lazy-upsert defaults from BOTH client and server ──────────
-// The Settings UI lazy-upserts on first load (browser); this function
-// also lazy-upserts on first request (server). Either path can be
-// hit first depending on user behavior. Both paths converge on the
-// same defaults, defined as constants below. If real Eidrix later
-// moves defaults to a config table or per-tenant template, both
-// paths read from there instead — but the convergence guarantee stays.
+// ─── Why streaming (not messages.create) ──────────────────────────────
+// "More rigorous / more to learn" call from the student. Streaming
+// within tool loops is the pattern the SDK is actually designed for;
+// builds the right mental model for real Eidrix. Slightly more code,
+// same end behavior on happy path, richer UX (user sees text appear
+// live across iterations instead of stalling during tool execution).
+//
+// ─── What's deferred to Session 2 ────────────────────────────────────
+// - UI context injection (activeTab, activeRecord, activeSection)
+// - Confirmation UI for destructive tools (they execute directly now)
+// - Live UI refresh after mutations (returns affected-entities list)
+// - Ambiguity-resolution prompt tuning
 // ──────────────────────────────────────────────────────────────────────
 
 import Anthropic from '@anthropic-ai/sdk'
@@ -37,6 +40,8 @@ import type { Context } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 
 import type { Database } from '../../src/types/database.types'
+import { TOOL_REGISTRY, TOOL_SCHEMAS } from './_lib/tools'
+import type { ToolContext, ToolResult } from './_lib/tools'
 
 // ─── CORS ────────────────────────────────────────────────────────────
 
@@ -49,31 +54,38 @@ const CORS_HEADERS = {
 // ─── Constants ───────────────────────────────────────────────────────
 
 const MAX_TOKENS = 2048
+/** Hard cap on loop iterations. A runaway loop burns tokens and may
+ *  exceed Netlify's function timeout. 10 is generous — most agentic
+ *  flows complete in 1-3 iterations. Hitting this cap emits a graceful
+ *  "stopped at N steps" synthetic response. */
+const MAX_ITERATIONS = 10
 
 // Subset selection: customer is "in subset" if updated within this
-// many days OR has any job in an open status. Tunable per real-Eidrix
-// tenant later; one knob for now.
+// many days OR has any job in an open status.
 const SUBSET_RECENT_DAYS = 30
-
-// Job statuses considered "open" for the subset and counts.
 const OPEN_JOB_STATUSES = ['draft', 'scheduled', 'in_progress'] as const
 
-// ─── Defaults — duplicated from src/types/agentSettings.ts ──────────
-// Lives here as well because Netlify Functions get their own bundle
-// and can't import from src/. If you change these, change there too.
-// Real Eidrix may move both to a shared `defaults/` package.
+// ─── Defaults — mirror src/types/agentSettings.ts ────────────────────
+// Post-AC-03 default flip: context_mode defaults to 'off'. With tools
+// available, the agent can fetch exactly what it needs on demand via
+// searchCustomers / findJobsByStatus / summarizeForCustomer. "Off" is
+// now the cheapest AND most scalable default. Subset remains available
+// for users who want pre-loaded recent context; Full stays for debug
+// / small-dataset work.
 
 const DEFAULT_SYSTEM_PROMPT = `You are Eidrix — an operational assistant embedded in a small business owner's workspace.
 
-You see their customers and jobs (when they've enabled context). Your job is to help them think through real operational decisions: who needs follow-up, what's blocking a job, where their attention is best spent today.
+You see their customers, jobs, and proposals (when they've enabled context, and on demand via your tools). Your job is to help them think through real operational decisions: who needs follow-up, what's blocking a job, where their attention is best spent today.
+
+You have tools to create, update, delete, and find customers, jobs, and proposals. When the user asks for a concrete operation (add/update/delete/find), use the appropriate tool. When the user asks for explanation or opinion, respond directly without tools. When you're uncertain whether to act or ask, prefer one clear clarifying question over guessing.
+
+If the user refers to someone by partial name and you don't already have that customer in context, use searchCustomers first to resolve the id before acting. If multiple customers match, ask which they meant with specific detail ("Which Joe — Joe Smith with 3 open jobs, or Joe Martinez?").
 
 Be direct. Be specific. When the data shows a thing, name it. When you don't know, say so plainly — never invent.
 
-Skip performative enthusiasm. Skip "Great question!" Skip exclamation points. They're a contractor or shop owner, not an audience.
+Skip performative enthusiasm. Skip "Great question!" Skip exclamation points. They're a contractor or shop owner, not an audience.`
 
-When asked about their data, look at what's actually there. When asked something general, give a useful operator's answer.`
-
-const DEFAULT_CONTEXT_MODE = 'subset'
+const DEFAULT_CONTEXT_MODE = 'off'
 const DEFAULT_MODEL = 'claude-sonnet-4-6'
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -105,6 +117,14 @@ interface ContextPayload {
   warning: string | null
 }
 
+interface ToolCallLogEntry {
+  name: string
+  input: unknown
+  result: ToolResult
+  durationMs: number
+  iteration: number
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────
 
 function json(body: unknown, init: ResponseInit = {}) {
@@ -130,16 +150,9 @@ function createUserClient(jwt: string) {
   })
 }
 
-/** Find the user's active org via memberships. RLS scopes this to the
- *  caller. For Trial and Error each user has exactly one membership;
- *  we take the first. Real Eidrix's multi-org future stores a
- *  preferred org in user_metadata and reads that here.
- *
- *  Returns:
- *    { kind: 'ok', orgId }       — happy path
- *    { kind: 'none' }            — auth worked, user just has no memberships
- *    { kind: 'error', message }  — DB/RLS failure; caller should surface 500
- */
+/** Find the user's active org via memberships. RLS scopes this query
+ *  to the caller. Trial and Error users have exactly one membership;
+ *  we take the first. */
 type ActiveOrgResult =
   | { kind: 'ok'; orgId: string }
   | { kind: 'none' }
@@ -162,9 +175,6 @@ async function findActiveOrgId(
   return { kind: 'ok', orgId: data.organization_id }
 }
 
-/** Shape a DB row OR a fallback defaults stub into the AgentSettings
- *  shape. Used by all three paths in loadAgentSettings (existing row,
- *  lazy-upserted row, defaults fallback). */
 function mapToAgentSettings(
   row: {
     organization_id: string
@@ -190,8 +200,6 @@ function mapToAgentSettings(
   }
 }
 
-/** Load agent_settings for the org. If no row exists, lazy-upsert
- *  defaults so the next call (and the Settings UI) sees a row. */
 async function loadAgentSettings(
   supabase: ReturnType<typeof createUserClient>,
   orgId: string,
@@ -204,12 +212,10 @@ async function loadAgentSettings(
 
   if (error) {
     console.error('[chat] loadAgentSettings select error:', error)
-    // Fall through to defaults rather than blocking the chat.
   }
 
   if (data) return mapToAgentSettings(data, orgId)
 
-  // Lazy upsert.
   const { data: inserted, error: insertError } = await supabase
     .from('agent_settings')
     .insert({
@@ -223,9 +229,6 @@ async function loadAgentSettings(
 
   if (insertError || !inserted) {
     console.error('[chat] lazy-upsert agent_settings failed:', insertError)
-    // Return constant defaults so the chat still works even if the
-    // insert was blocked (e.g., transient DB issue). User won't see
-    // their settings persisted but their message will go through.
     return mapToAgentSettings(null, orgId)
   }
 
@@ -233,10 +236,8 @@ async function loadAgentSettings(
 }
 
 // ─── Context formatters ─────────────────────────────────────────────
-// Output is STRUCTURED — pipes for fields, dashes for absent values,
-// caps for headers, totals at the bottom. Claude reasons dramatically
-// better on this format than prose. See AC-02's "Structured context
-// beats prose" tour moment for the why.
+// Same as AC-02 — pipes/dashes/caps-headers format, not prose. Reason:
+// Claude reasons dramatically better on this format for relational data.
 
 function formatAmount(amount: number | null): string {
   if (amount === null || amount === undefined) return '$0'
@@ -348,7 +349,6 @@ async function buildContextPayload(
     }
   }
 
-  // Always fetch totals + status breakdown (cheap; one tiny query each).
   const [
     { count: totalCustomers, error: cErr },
     { data: allJobs, error: jErr },
@@ -407,8 +407,6 @@ async function buildContextPayload(
     customers = cData ?? []
     jobs = jData ?? []
   } else {
-    // 'subset': recent customers OR customers with open jobs, plus jobs
-    // belonging to those customers AND in open statuses.
     blockLabel = `recent ${SUBSET_RECENT_DAYS}d + open`
     const cutoffIso = new Date(
       Date.now() - SUBSET_RECENT_DAYS * 24 * 60 * 60 * 1000,
@@ -419,7 +417,7 @@ async function buildContextPayload(
         supabase
           .from('jobs')
           .select('id, customer_id, title, status, scheduled_date, amount')
-          .in('status', OPEN_JOB_STATUSES as unknown as string[])
+          .in('status', [...OPEN_JOB_STATUSES])
           .order('scheduled_date', { ascending: true, nullsFirst: false }),
         supabase
           .from('customers')
@@ -443,7 +441,6 @@ async function buildContextPayload(
 
     jobs = openJobsRaw ?? []
 
-    // Union: recent customers ∪ customers referenced by open jobs.
     const customerIdsFromJobs = new Set(jobs.map((j) => j.customer_id))
     const recentIds = new Set((recentCustomers ?? []).map((c) => c.id))
     const missingCustomerIds = [...customerIdsFromJobs].filter(
@@ -503,6 +500,35 @@ async function buildContextPayload(
   }
 }
 
+// ─── Tool execution ──────────────────────────────────────────────────
+
+/** Execute a single tool_use block against the registry. Always
+ *  returns a ToolResult; unknown tool names return a structured error
+ *  rather than throwing. */
+async function executeToolCall(
+  name: string,
+  input: unknown,
+  ctx: ToolContext,
+): Promise<ToolResult> {
+  const executor = TOOL_REGISTRY[name]
+  if (!executor) {
+    return {
+      success: false,
+      error: `Unknown tool: ${name}`,
+      code: 'unknown_tool',
+    }
+  }
+  try {
+    return await executor(input, ctx)
+  } catch (err) {
+    // Executors are supposed to never throw, but this is a last-line
+    // defense. Any uncaught throw becomes a structured error.
+    const message = err instanceof Error ? err.message : 'Executor threw'
+    console.error(`[chat] Tool ${name} threw unexpectedly:`, err)
+    return { success: false, error: message, code: 'db_error' }
+  }
+}
+
 // ─── Main handler ────────────────────────────────────────────────────
 
 export default async (req: Request, _context: Context) => {
@@ -513,7 +539,7 @@ export default async (req: Request, _context: Context) => {
     return json({ error: 'Method not allowed' }, { status: 405 })
   }
 
-  // Auth header
+  // Auth
   const authHeader = req.headers.get('authorization') ?? ''
   const jwt = authHeader.replace(/^Bearer\s+/i, '').trim()
   if (!jwt) {
@@ -555,7 +581,7 @@ export default async (req: Request, _context: Context) => {
     )
   }
 
-  // Per-request Supabase client (RLS context = this user's JWT)
+  // Per-request Supabase client
   let supabaseForUser
   try {
     supabaseForUser = createUserClient(jwt)
@@ -567,9 +593,6 @@ export default async (req: Request, _context: Context) => {
     )
   }
 
-  // Active org — distinguish "no membership" (403, user-facing) from
-  // "DB/RLS error" (500, server-side issue) so debugging real auth
-  // problems isn't a wild goose chase through "missing workspace" UX.
   const orgResult = await findActiveOrgId(supabaseForUser)
   if (orgResult.kind === 'error') {
     return json(
@@ -585,9 +608,12 @@ export default async (req: Request, _context: Context) => {
   }
   const orgId = orgResult.orgId
 
-  // Settings first (we need the context_mode), then context fetch
-  // (depends on settings.context_mode). They are NOT independent and
-  // can't be parallelized.
+  // Resolve userId from the JWT for ToolContext. Non-fatal if missing;
+  // we fall back to the orgId as a placeholder. (Supabase JWT carries
+  // `sub` as the user id.)
+  const { data: userResponse } = await supabaseForUser.auth.getUser()
+  const userId = userResponse?.user?.id ?? ''
+
   const settings = await loadAgentSettings(supabaseForUser, orgId)
   const context = await buildContextPayload(supabaseForUser, settings.context_mode)
 
@@ -598,55 +624,249 @@ export default async (req: Request, _context: Context) => {
   const requestStartedAt = Date.now()
   const anthropic = new Anthropic({ apiKey: anthropicKey })
 
+  // Build the message array we'll mutate across the loop. Start with
+  // the caller's messages; tool_use + tool_result blocks get appended
+  // as we iterate.
+  const workingMessages: Anthropic.MessageParam[] = body.messages.map(
+    (m) => ({ role: m.role, content: m.content }),
+  )
+
+  const toolCtx: ToolContext = {
+    supabase: supabaseForUser,
+    organizationId: orgId,
+    userId,
+  }
+
   const encoder = new TextEncoder()
   const stream = new ReadableStream({
     async start(controller) {
+      const toolCallLog: ToolCallLogEntry[] = []
+      let totalInputTokens = 0
+      let totalOutputTokens = 0
+      let totalCacheReadInputTokens = 0
+      let totalCacheCreationInputTokens = 0
+      let hitIterationCap = false
+      let messageStartEmitted = false
+
+      const enqueue = (eventObj: unknown) => {
+        try {
+          controller.enqueue(
+            encoder.encode(`data: ${JSON.stringify(eventObj)}\n\n`),
+          )
+        } catch {
+          // Controller may be closed (client disconnected).
+        }
+      }
+
+      let iterationsRun = 0
+
       try {
-        const anthropicStream = anthropic.messages.stream({
-          model: settings.model,
-          max_tokens: MAX_TOKENS,
-          system: finalSystemPrompt,
-          messages: body.messages,
-        })
+        for (let iteration = 1; iteration <= MAX_ITERATIONS; iteration++) {
+          iterationsRun = iteration
 
-        let inputTokens = 0
-        let outputTokens = 0
-        let cacheReadInputTokens = 0
-        let cacheCreationInputTokens = 0
+          const anthropicStream = anthropic.messages.stream({
+            model: settings.model,
+            max_tokens: MAX_TOKENS,
+            system: finalSystemPrompt,
+            messages: workingMessages,
+            tools: TOOL_SCHEMAS,
+          })
 
-        for await (const event of anthropicStream) {
-          // Capture usage as it streams in (message_start carries
-          // input_tokens; message_delta updates output_tokens).
-          if (event.type === 'message_start') {
-            const usage = event.message?.usage
-            if (usage) {
-              inputTokens = usage.input_tokens ?? 0
-              outputTokens = usage.output_tokens ?? 0
-              cacheReadInputTokens = usage.cache_read_input_tokens ?? 0
-              cacheCreationInputTokens = usage.cache_creation_input_tokens ?? 0
+          // Track which block indices are text (forward) vs tool_use
+          // (server-side only). Keyed by the index field on the event.
+          const textBlockIndices = new Set<number>()
+
+          // Per-iteration usage capture. Input + cache tokens arrive on
+          // message_start (snapshot); output_tokens' final value lands
+          // on message_delta. We accumulate into the running totals at
+          // the END of each iteration to avoid double-counting.
+          let iterInputTokens = 0
+          let iterOutputTokens = 0
+          let iterCacheReadInputTokens = 0
+          let iterCacheCreationInputTokens = 0
+
+          for await (const event of anthropicStream) {
+            if (event.type === 'message_start') {
+              const usage = event.message?.usage
+              if (usage) {
+                iterInputTokens = usage.input_tokens ?? 0
+                iterOutputTokens = usage.output_tokens ?? 0
+                iterCacheReadInputTokens = usage.cache_read_input_tokens ?? 0
+                iterCacheCreationInputTokens =
+                  usage.cache_creation_input_tokens ?? 0
+              }
+              // Forward ONCE — client needs this to start the assistant
+              // message in its UI.
+              if (!messageStartEmitted) {
+                messageStartEmitted = true
+                enqueue(event)
+              }
+              continue
             }
-          } else if (event.type === 'message_delta') {
-            const usage = event.usage
-            if (usage) {
-              outputTokens = usage.output_tokens ?? outputTokens
+
+            if (event.type === 'message_delta') {
+              const usage = event.usage
+              if (usage) {
+                // message_delta carries the final output_tokens for
+                // this iteration — overwrite (not add) the snapshot.
+                iterOutputTokens = usage.output_tokens ?? iterOutputTokens
+              }
+              // Don't forward — we'd send a stop_reason mid-loop and
+              // confuse the client. We emit a terminal message_delta
+              // once at the very end.
+              continue
             }
+
+            if (event.type === 'message_stop') {
+              // Don't forward — we emit one at the end. If this is the
+              // FINAL iteration (stop_reason end_turn), the code below
+              // handles emitting message_stop after the for-await.
+              continue
+            }
+
+            if (event.type === 'content_block_start') {
+              const block = event.content_block
+              if (block && block.type === 'text') {
+                textBlockIndices.add(event.index)
+                enqueue(event)
+              }
+              // tool_use block_start: suppress (server-side only).
+              continue
+            }
+
+            if (event.type === 'content_block_delta') {
+              // Forward text_delta only; drop input_json_delta.
+              if (textBlockIndices.has(event.index)) {
+                enqueue(event)
+              }
+              continue
+            }
+
+            if (event.type === 'content_block_stop') {
+              if (textBlockIndices.has(event.index)) {
+                enqueue(event)
+              }
+              continue
+            }
+
+            // Any other event type we haven't seen — safe to skip.
           }
 
-          const frame = `data: ${JSON.stringify(event)}\n\n`
-          controller.enqueue(encoder.encode(frame))
+          // Accumulate this iteration's final token counts into the
+          // request-wide totals. Done once per iteration, not per event,
+          // so we can't double-count.
+          totalInputTokens += iterInputTokens
+          totalOutputTokens += iterOutputTokens
+          totalCacheReadInputTokens += iterCacheReadInputTokens
+          totalCacheCreationInputTokens += iterCacheCreationInputTokens
+
+          // Stream ended. Get the fully-assembled message.
+          const finalMessage = await anthropicStream.finalMessage()
+
+          if (finalMessage.stop_reason === 'end_turn') {
+            // Normal completion. Client already has all the text via
+            // forwarded deltas. Emit message_stop + usage + close.
+            enqueue({ type: 'message_stop' })
+            break
+          }
+
+          if (finalMessage.stop_reason === 'max_tokens') {
+            // Emit an error SSE so the client can display it. The
+            // partial text (if any) is already on screen via deltas.
+            enqueue({
+              type: 'error',
+              error: {
+                status: 500,
+                message: 'Response exceeded max tokens. Try a more focused question.',
+              },
+            })
+            break
+          }
+
+          if (finalMessage.stop_reason === 'tool_use') {
+            // Extract tool_use blocks, execute in parallel, append to
+            // messages, loop.
+            const toolUseBlocks = finalMessage.content.filter(
+              (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
+            )
+
+            // Execute in parallel. Promise.all preserves order, so we
+            // can zip results back against the blocks by index.
+            const results = await Promise.all(
+              toolUseBlocks.map(async (block) => {
+                const started = Date.now()
+                const result = await executeToolCall(
+                  block.name,
+                  block.input,
+                  toolCtx,
+                )
+                const durationMs = Date.now() - started
+                toolCallLog.push({
+                  name: block.name,
+                  input: block.input,
+                  result,
+                  durationMs,
+                  iteration,
+                })
+                return { block, result }
+              }),
+            )
+
+            // Append the assistant turn (full content including text
+            // + tool_use blocks) to the messages array so Claude sees
+            // the context on the next iteration.
+            workingMessages.push({
+              role: 'assistant',
+              content: finalMessage.content,
+            })
+
+            // Append tool_result blocks as a single user message.
+            const toolResultContent: Anthropic.ToolResultBlockParam[] =
+              results.map(({ block, result }) => ({
+                type: 'tool_result',
+                tool_use_id: block.id,
+                content: JSON.stringify(result),
+                is_error: !result.success,
+              }))
+            workingMessages.push({ role: 'user', content: toolResultContent })
+
+            if (iteration === MAX_ITERATIONS) {
+              hitIterationCap = true
+            }
+            continue
+          }
+
+          // Any other stop_reason (pause_turn, refusal, etc.) — treat
+          // as completion for now; Session 2 may handle these richer.
+          enqueue({ type: 'message_stop' })
+          break
         }
 
-        // Final eidrix-specific event with all the bookkeeping the
-        // Debug tab needs. Type 'eidrix_usage' so the client can
-        // distinguish it from native Anthropic events.
+        if (hitIterationCap) {
+          // Synthetic graceful-stop text. We can't emit a full new
+          // content_block here cleanly because we may be mid-loop;
+          // use the error channel so the client surfaces it.
+          enqueue({
+            type: 'error',
+            error: {
+              status: 500,
+              message:
+                `Stopped after ${MAX_ITERATIONS} steps to check in. ` +
+                'The completed actions are visible in the affected tabs. ' +
+                'Ask me to continue if you\'d like me to keep going.',
+            },
+          })
+        }
+
+        // Final usage event — carries everything the Debug tab needs.
         const usageEvent = {
           type: 'eidrix_usage',
           model: settings.model,
           contextMode: settings.context_mode,
-          inputTokens,
-          outputTokens,
-          cacheReadInputTokens,
-          cacheCreationInputTokens,
+          inputTokens: totalInputTokens,
+          outputTokens: totalOutputTokens,
+          cacheReadInputTokens: totalCacheReadInputTokens,
+          cacheCreationInputTokens: totalCacheCreationInputTokens,
           systemPromptBytes: finalSystemPrompt.length,
           customerCount: context.customerCount,
           jobCount: context.jobCount,
@@ -654,30 +874,25 @@ export default async (req: Request, _context: Context) => {
           totalJobs: context.totalJobs,
           contextWarning: context.warning,
           responseTimeMs: Date.now() - requestStartedAt,
-          // Full prompt the model saw — Debug tab renders this. Not
-          // logged anywhere on the server; only this caller sees it.
           systemPromptSent: finalSystemPrompt,
+          // AC-03 additions:
+          toolCalls: toolCallLog,
+          iterations: iterationsRun,
+          hitIterationCap,
         }
-        controller.enqueue(
-          encoder.encode(`data: ${JSON.stringify(usageEvent)}\n\n`),
-        )
-
+        enqueue(usageEvent)
         controller.close()
       } catch (err) {
         const status =
           err instanceof Anthropic.APIError ? err.status : undefined
         const message = err instanceof Error ? err.message : 'Unknown error'
-
-        const errorFrame = `data: ${JSON.stringify({
-          type: 'error',
-          error: { status, message },
-        })}\n\n`
+        console.error('[chat] Stream failed:', err)
+        enqueue({ type: 'error', error: { status, message } })
         try {
-          controller.enqueue(encoder.encode(errorFrame))
+          controller.close()
         } catch {
-          // Controller may already be closed.
+          // already closed
         }
-        controller.close()
       }
     },
   })

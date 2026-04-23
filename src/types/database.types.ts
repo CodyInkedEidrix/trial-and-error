@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -241,6 +241,67 @@ export type Database = {
         }
         Relationships: []
       }
+      proposals: {
+        Row: {
+          amount: number
+          created_at: string
+          customer_id: string
+          id: string
+          job_id: string | null
+          notes: string | null
+          organization_id: string
+          status: Database["public"]["Enums"]["proposal_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number
+          created_at?: string
+          customer_id: string
+          id?: string
+          job_id?: string | null
+          notes?: string | null
+          organization_id: string
+          status?: Database["public"]["Enums"]["proposal_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number
+          created_at?: string
+          customer_id?: string
+          id?: string
+          job_id?: string | null
+          notes?: string | null
+          organization_id?: string
+          status?: Database["public"]["Enums"]["proposal_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposals_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposals_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -262,6 +323,7 @@ export type Database = {
         | "completed"
         | "cancelled"
       membership_role: "owner" | "admin" | "member"
+      proposal_status: "draft" | "sent" | "approved" | "rejected"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -407,6 +469,7 @@ export const Constants = {
         "cancelled",
       ],
       membership_role: ["owner", "admin", "member"],
+      proposal_status: ["draft", "sent", "approved", "rejected"],
     },
   },
 } as const

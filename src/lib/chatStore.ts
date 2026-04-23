@@ -28,6 +28,23 @@ import type { Message, MessageStatus } from '../types/message'
 import type { AgentModel } from '../types/agentSettings'
 import { supabase } from './supabase'
 import { useDebugStore } from './debugStore'
+import { useCustomerStore } from './customerStore'
+import { useJobStore } from './jobStore'
+import { useProposalStore } from './proposalStore'
+
+/** Called after the agent turn completes (success OR error) if any
+ *  tool calls were made during the loop. Refetches the three entity
+ *  stores so any server-side mutations become visible in the UI.
+ *
+ *  Session 1 uses the simple "refresh all three" approach. Session 2
+ *  upgrades this to a targeted refresh driven by an `affected` list
+ *  the function returns — today's call is ~3 cheap DB round trips per
+ *  agent turn, which is fine at Trial-and-Error scale. */
+function refreshAfterToolCalls() {
+  void useCustomerStore.getState().loadCustomers()
+  void useJobStore.getState().loadJobs()
+  void useProposalStore.getState().loadProposals()
+}
 
 // ─── Utilities ───────────────────────────────────────────────────────
 
@@ -279,6 +296,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           buildDebugEntry(trimmed, messagesForApi, accumulatedResponse, usageEvent, null),
         )
       }
+
+      // If the agent called any tools during this turn, refetch the
+      // entity stores so mutations become visible in the UI without
+      // the user having to tab-switch or refresh. Session 2 replaces
+      // this with a targeted `affected`-list refresh.
+      if (usageEvent?.toolCalls && usageEvent.toolCalls.length > 0) {
+        refreshAfterToolCalls()
+      }
     } catch (err) {
       // Cancel any pending RAF flush — no more content coming.
       if (rafId != null) {
@@ -315,6 +340,13 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       useDebugStore.getState().pushEntry(
         buildDebugEntry(trimmed, messagesForApi, accumulatedResponse, usageEvent, errorMessage),
       )
+
+      // Even on error, any tool calls that completed before the error
+      // committed to the DB. Refresh so the user sees the partial work
+      // rather than a misleading "nothing changed" UI.
+      if (usageEvent?.toolCalls && usageEvent.toolCalls.length > 0) {
+        refreshAfterToolCalls()
+      }
     }
   },
 
@@ -361,6 +393,16 @@ interface StreamEvent {
   contextWarning?: string | null
   responseTimeMs?: number
   systemPromptSent?: string
+  // AC-03 additions
+  toolCalls?: {
+    name: string
+    input: unknown
+    result: unknown
+    durationMs: number
+    iteration: number
+  }[]
+  iterations?: number
+  hitIterationCap?: boolean
 }
 
 /**
@@ -395,6 +437,9 @@ function buildDebugEntry(
     contextWarning: usageEvent?.contextWarning ?? null,
     responseTimeMs: usageEvent?.responseTimeMs ?? 0,
     errorMessage,
+    toolCalls: usageEvent?.toolCalls ?? [],
+    iterations: usageEvent?.iterations ?? 1,
+    hitIterationCap: usageEvent?.hitIterationCap ?? false,
   }
 }
 

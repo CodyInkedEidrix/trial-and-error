@@ -51,7 +51,13 @@ Skip performative enthusiasm. Skip "Great question!" Skip exclamation points. Th
 
 When asked about their data, look at what's actually there. When asked something general, give a useful operator's answer.`
 
-export const DEFAULT_CONTEXT_MODE: ContextMode = 'subset'
+// Post-AC-03 flip: default is 'off' now that tools exist. With
+// searchCustomers / findJobsForCustomer / summarizeForCustomer as
+// tools, the agent can fetch exactly what it needs on demand —
+// cheaper on tokens and more scalable to real-Eidrix's thousands-of-
+// records case. Users can still flip to 'subset' (recent + open jobs
+// preloaded) or 'full' (everything preloaded) in Settings.
+export const DEFAULT_CONTEXT_MODE: ContextMode = 'off'
 export const DEFAULT_MODEL: AgentModel = 'claude-sonnet-4-6'
 
 // ─── Model display metadata ──────────────────────────────────────────

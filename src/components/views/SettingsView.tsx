@@ -29,15 +29,19 @@ import {
 import Button from '../ui/Button'
 
 const CONTEXT_OPTIONS: { value: ContextMode; label: string }[] = [
-  { value: 'off', label: 'Off' },
+  { value: 'off', label: 'Off (tool-driven)' },
   { value: 'subset', label: 'Smart Subset' },
   { value: 'full', label: 'Full' },
 ]
 
+// Post-AC-03 copy: Eidrix now has tools (searchCustomers, findJobsFor*,
+// summarizeForCustomer, etc.) — so "Off" no longer means blindness. It
+// means the agent reads your data on demand by calling tools. This is
+// the new default: cheapest on tokens, scales to thousands of records.
 const CONTEXT_HINTS: Record<ContextMode, string> = {
-  off: 'Eidrix sees nothing about your business. Prompt-only.',
-  subset: 'Recent customers and open jobs only. Token-efficient.',
-  full: 'Every customer and every job. Higher cost; better recall.',
+  off: 'Nothing preloaded — Eidrix reads your data on demand via tools (search, find, summarize). Cheapest on tokens, scales best. Recommended.',
+  subset: 'Recent customers and open jobs preloaded. Useful when "right now" questions dominate. Tools still available for older data.',
+  full: 'Everything preloaded. Fine on small datasets; redundant with tools at scale.',
 }
 
 export default function SettingsView() {
@@ -52,7 +56,7 @@ export default function SettingsView() {
 
   // Local draft state — editing the prompt doesn't fire writes per keystroke.
   const [draftPrompt, setDraftPrompt] = useState('')
-  const [draftMode, setDraftMode] = useState<ContextMode>('subset')
+  const [draftMode, setDraftMode] = useState<ContextMode>(DEFAULT_CONTEXT_MODE)
   const [draftModel, setDraftModel] = useState<AgentModel>(DEFAULT_MODEL)
 
   // Sync draft from store whenever settings load or change externally.

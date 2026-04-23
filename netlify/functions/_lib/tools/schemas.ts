@@ -107,11 +107,12 @@ const updateCustomer: Anthropic.Tool = {
 const deleteCustomer: Anthropic.Tool = {
   name: 'deleteCustomer',
   description: [
-    "Permanently delete a customer. Use when the user explicitly asks to delete, remove, or get rid of a customer.",
-    'This cascades: the customer, all their jobs, and all their proposals are removed together.',
-    'Required: id (UUID of the customer).',
-    'Note: AC-03 Session 2 adds user confirmation UI that gates destructive calls. For now the deletion executes immediately — so act carefully and only on clear explicit requests.',
-    'Returns { id, deleted: true } on success.',
+    'Delete a customer. This is a DESTRUCTIVE two-phase operation.',
+    'PHASE 1 (preview): Call with just the id, NO confirmation_token. The executor returns a preview payload with { requires_confirmation: true, summary, confirmation_token }. You then explain the summary to the user and wait for their approval.',
+    'PHASE 2 (commit): After the user confirms, call this tool AGAIN with the SAME id and the confirmation_token from the preview response. This is when the deletion actually happens.',
+    'NEVER skip phase 1. "Delete Alice" from the user is a REQUEST, not a confirmation. Always preview first.',
+    'Cascades: deleting the customer also deletes all their jobs and proposals.',
+    'Returns { id, deleted: true } on commit success.',
   ].join(' '),
   input_schema: {
     type: 'object',
@@ -119,6 +120,11 @@ const deleteCustomer: Anthropic.Tool = {
       id: {
         type: 'string',
         description: 'UUID of the customer to delete. Required.',
+      },
+      confirmation_token: {
+        type: 'string',
+        description:
+          'The token from the preview response. Required for phase 2. Do NOT set on phase 1 — the executor will mint the token for you.',
       },
     },
     required: ['id'],
@@ -243,15 +249,21 @@ const updateJob: Anthropic.Tool = {
 const deleteJob: Anthropic.Tool = {
   name: 'deleteJob',
   description: [
-    'Permanently delete a job. Use when the user explicitly asks to delete or remove a job.',
-    'Note: AC-03 Session 2 adds user confirmation UI. For now the deletion executes immediately.',
-    'Deleting a job sets linked proposals\' job_id to null (the proposals are preserved as historical records).',
-    'Returns { id, deleted: true } on success.',
+    'Delete a job. DESTRUCTIVE two-phase operation.',
+    'PHASE 1 (preview): call with just the id; executor returns a preview with a confirmation_token. Explain the summary, get user approval.',
+    'PHASE 2 (commit): call again with the same id AND the confirmation_token. The actual deletion happens here.',
+    'Never skip phase 1. Deleting a job sets linked proposals\' job_id to null (proposals are preserved as historical records).',
+    'Returns { id, deleted: true } on commit.',
   ].join(' '),
   input_schema: {
     type: 'object',
     properties: {
       id: { type: 'string', description: 'UUID of the job to delete.' },
+      confirmation_token: {
+        type: 'string',
+        description:
+          'Token from the preview response. Required for phase 2.',
+      },
     },
     required: ['id'],
   },
@@ -397,14 +409,21 @@ const updateProposal: Anthropic.Tool = {
 const deleteProposal: Anthropic.Tool = {
   name: 'deleteProposal',
   description: [
-    'Permanently delete a proposal. Use when the user explicitly asks to delete or remove a proposal.',
-    'Note: AC-03 Session 2 adds user confirmation UI. For now the deletion executes immediately.',
-    'Returns { id, deleted: true } on success.',
+    'Delete a proposal. DESTRUCTIVE two-phase operation.',
+    'PHASE 1 (preview): call with just the id; executor returns a preview with a confirmation_token. Explain the summary, get user approval.',
+    'PHASE 2 (commit): call again with the same id AND the confirmation_token. The actual deletion happens here.',
+    'Never skip phase 1.',
+    'Returns { id, deleted: true } on commit.',
   ].join(' '),
   input_schema: {
     type: 'object',
     properties: {
       id: { type: 'string', description: 'UUID of the proposal.' },
+      confirmation_token: {
+        type: 'string',
+        description:
+          'Token from the preview response. Required for phase 2.',
+      },
     },
     required: ['id'],
   },

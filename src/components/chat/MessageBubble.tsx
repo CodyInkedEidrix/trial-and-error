@@ -14,6 +14,7 @@
 import { motion, useReducedMotion } from 'framer-motion'
 
 import type { Message } from '../../types/message'
+import PendingActionCard from './PendingActionCard'
 
 function formatTime(iso: string): string {
   const d = new Date(iso)
@@ -64,6 +65,32 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
         >
           {formatTime(message.createdAt)}
         </p>
+        {!isUser && message.pendingAction && (
+          <PendingActionCard
+            assistantMessageId={message.id}
+            pendingAction={message.pendingAction}
+          />
+        )}
+        {!isUser && message.toolErrors && message.toolErrors.length > 0 && (
+          <div className="mt-2 rounded-sm border border-danger-500/40 bg-danger-500/5 px-3 py-2">
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-danger-500">
+              {message.toolErrors.length === 1
+                ? '1 tool error'
+                : `${message.toolErrors.length} tool errors`}
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {message.toolErrors.map((err, i) => (
+                <li
+                  key={i}
+                  className="font-mono text-[11px] text-danger-500/90"
+                >
+                  <span className="text-text-tertiary">{err.tool}:</span>{' '}
+                  {err.message}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
     </motion.div>
   )

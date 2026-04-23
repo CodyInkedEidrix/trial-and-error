@@ -144,3 +144,116 @@ export function isToolResult(value: unknown): value is ToolResult {
     typeof (value as ToolResult).success === 'boolean'
   )
 }
+
+// ─── Value validators (real-Eidrix hardening) ────────────────────────
+// Executors use these to reject garbage before it hits Postgres. Each
+// returns the cleaned value on success or a ToolResult on failure so
+// the executor can early-return with a clear error Claude can reason
+// about.
+
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+/** Constraints that match what the UI forms also enforce. Keep in
+ *  sync; the server is the authoritative check. */
+export const FIELD_LIMITS = {
+  NAME_MAX: 120,
+  COMPANY_MAX: 120,
+  EMAIL_MAX: 254,
+  PHONE_MAX: 40,
+  TITLE_MAX: 200,
+  NOTES_MAX: 5000,
+  STATUS_MAX: 40,
+  AMOUNT_MAX: 10_000_000,
+} as const
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+/** Normalized email — lowercased, trimmed, format-checked. Returns
+ *  the cleaned string or a ToolResult error. */
+export function validateEmail(raw: string | undefined): string | ToolResult | undefined {
+  if (raw === undefined) return undefined
+  const trimmed = raw.trim().toLowerCase()
+  if (trimmed.length === 0) return undefined
+  if (trimmed.length > FIELD_LIMITS.EMAIL_MAX) {
+    return invalidParams(`email exceeds ${FIELD_LIMITS.EMAIL_MAX} chars`)
+  }
+  if (!EMAIL_PATTERN.test(trimmed)) {
+    return invalidParams('email is not a valid email address')
+  }
+  return trimmed
+}
+
+/** Phone: trimmed, length-capped. We deliberately do NOT reformat
+ *  (no E.164 assumption) because small businesses enter phones in
+ *  local formats; we just guard against absurd input. */
+export function validatePhone(raw: string | undefined): string | ToolResult | undefined {
+  if (raw === undefined) return undefined
+  const trimmed = raw.trim()
+  if (trimmed.length === 0) return undefined
+  if (trimmed.length > FIELD_LIMITS.PHONE_MAX) {
+    return invalidParams(`phone exceeds ${FIELD_LIMITS.PHONE_MAX} chars`)
+  }
+  return trimmed
+}
+
+/** Amount: finite, non-negative, below the sanity cap. Protects
+ *  against typos like "15000000" for a proposal and against
+ *  Number(undefined)→NaN sneaking through. */
+export function validateAmount(raw: number | undefined): number | ToolResult | undefined {
+  if (raw === undefined) return undefined
+  if (!Number.isFinite(raw)) {
+    return invalidParams('amount must be a finite number')
+  }
+  if (raw < 0) return invalidParams('amount cannot be negative')
+  if (raw > FIELD_LIMITS.AMOUNT_MAX) {
+    return invalidParams(
+      `amount cannot exceed $${FIELD_LIMITS.AMOUNT_MAX.toLocaleString()}`,
+    )
+  }
+  return raw
+}
+
+/** Text field: trimmed length check. Blank strings normalize to
+ *  undefined so the caller can treat them as "not set". */
+export function validateText(
+  raw: string | undefined,
+  max: number,
+  fieldName: string,
+): string | ToolResult | undefined {
+  if (raw === undefined) return undefined
+  const trimmed = raw.trim()
+  if (trimmed.length === 0) return undefined
+  if (trimmed.length > max) {
+    return invalidParams(`${fieldName} exceeds ${max} chars`)
+  }
+  return trimmed
+}
+
+/** UUID sanity check — fail fast on malformed ids before a query
+ *  with a cast error. */
+export function validateUuid(raw: string | undefined, fieldName: string): string | ToolResult | undefined {
+  if (raw === undefined) return undefined
+  if (!UUID_PATTERN.test(raw)) {
+    return invalidParams(`${fieldName} is not a valid UUID`)
+  }
+  return raw
+}
+
+// ─── Result size caps ────────────────────────────────────────────────
+
+/** Default cap for `find…` and `search…` tool results. Past this,
+ *  results are truncated with a `{truncated: true, total, shown}`
+ *  indicator so Claude can tell the user "100 of 247 matched" instead
+ *  of silently omitting data. Tune per-tool if a different cap is
+ *  appropriate. */
+export const DEFAULT_RESULT_CAP = 100
+
+/** Build the metadata block for a capped list. Embed in tool result
+ *  data alongside the array. */
+export function buildCapMeta(total: number, shown: number) {
+  return {
+    truncated: total > shown,
+    total,
+    shown,
+  }
+}

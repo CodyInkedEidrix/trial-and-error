@@ -24,26 +24,37 @@ import type {
   EyeState,
   ReactionName,
 } from '../components/brand/eye-config'
-import type { Message, MessageStatus } from '../types/message'
+import type {
+  Message,
+  MessageStatus,
+  PendingAction,
+  ToolErrorSummary,
+} from '../types/message'
 import type { AgentModel } from '../types/agentSettings'
 import { supabase } from './supabase'
 import { useDebugStore } from './debugStore'
 import { useCustomerStore } from './customerStore'
 import { useJobStore } from './jobStore'
 import { useProposalStore } from './proposalStore'
+import { snapshotUiContext } from './uiContext'
+import type { UiContext } from '../types/uiContext'
 
-/** Called after the agent turn completes (success OR error) if any
- *  tool calls were made during the loop. Refetches the three entity
- *  stores so any server-side mutations become visible in the UI.
+/** Called after the agent turn completes (success OR error) with the
+ *  set of entity stores the function reports as affected. Targeted
+ *  refetch means a read-only turn ("how many open jobs?") costs zero
+ *  refetches; a surgical update ("mark proposal X approved") refetches
+ *  only proposals.
  *
- *  Session 1 uses the simple "refresh all three" approach. Session 2
- *  upgrades this to a targeted refresh driven by an `affected` list
- *  the function returns — today's call is ~3 cheap DB round trips per
- *  agent turn, which is fine at Trial-and-Error scale. */
-function refreshAfterToolCalls() {
-  void useCustomerStore.getState().loadCustomers()
-  void useJobStore.getState().loadJobs()
-  void useProposalStore.getState().loadProposals()
+ *  The function (chat.ts) compiles `affectedEntities` from TOOL_AFFECTS
+ *  at execution time — only SUCCESSFUL writes mark their store. Failed
+ *  writes leave DB state unchanged so the client's cached data is
+ *  already in sync. */
+function refreshAffected(affected: string[] | undefined) {
+  if (!affected || affected.length === 0) return
+  const set = new Set(affected)
+  if (set.has('customers')) void useCustomerStore.getState().loadCustomers()
+  if (set.has('jobs')) void useJobStore.getState().loadJobs()
+  if (set.has('proposals')) void useProposalStore.getState().loadProposals()
 }
 
 // ─── Utilities ───────────────────────────────────────────────────────
@@ -75,6 +86,16 @@ interface ChatStore {
 
   /** Entry point — sends user message, streams the assistant reply. */
   sendUserMessage: (content: string) => Promise<void>
+
+  /** Click handler for the Confirm button on a pending-action card.
+   *  Marks the card resolved and sends a programmatic follow-up user
+   *  message so Claude sees the approval in conversation history. */
+  confirmPendingAction: (assistantMessageId: string) => Promise<void>
+
+  /** Click handler for the Cancel button. Marks resolved and sends
+   *  a programmatic "cancelled" follow-up so the audit trail is
+   *  complete. */
+  cancelPendingAction: (assistantMessageId: string) => Promise<void>
 
   /** Called by the Eye when a reaction animation completes. */
   clearReaction: () => void
@@ -172,13 +193,19 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const accessToken = sessionData?.session?.access_token ?? ''
 
     try {
+      // Capture UI context AT SEND TIME — represents what the user was
+      // looking at when they hit send, not whatever they navigate to
+      // while Claude thinks. See src/lib/uiContext.ts for the full
+      // rationale on snapshot-vs-subscribe.
+      const uiContext = snapshotUiContext()
+
       const response = await fetch('/.netlify/functions/chat', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ messages: messagesForApi }),
+        body: JSON.stringify({ messages: messagesForApi, uiContext }),
       })
 
       // Pre-stream error — HTTP status is meaningful here. 429 drives
@@ -242,6 +269,27 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             // Final summary event from the function. Captured for the
             // Debug tab; doesn't affect the streamed message UI.
             usageEvent = event
+          } else if (event.type === 'eidrix_pending_action') {
+            // A destructive tool was previewed on the server. Attach
+            // the card to the current assistant message so it renders
+            // inline with Claude's summary text.
+            const pendingAction: PendingAction = {
+              action: typeof event.action === 'string' ? event.action : 'unknown',
+              params:
+                event.params && typeof event.params === 'object'
+                  ? (event.params as Record<string, unknown>)
+                  : {},
+              summary: typeof event.summary === 'string' ? event.summary : '',
+              confirmationToken:
+                typeof event.confirmationToken === 'string'
+                  ? event.confirmationToken
+                  : '',
+            }
+            set((state) => ({
+              messages: state.messages.map((m) =>
+                m.id === assistantId ? { ...m, pendingAction } : m,
+              ),
+            }))
           } else if (event.type === 'error') {
             throw new StreamError(
               event.error?.status ?? 500,
@@ -297,13 +345,34 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         )
       }
 
-      // If the agent called any tools during this turn, refetch the
-      // entity stores so mutations become visible in the UI without
-      // the user having to tab-switch or refresh. Session 2 replaces
-      // this with a targeted `affected`-list refresh.
-      if (usageEvent?.toolCalls && usageEvent.toolCalls.length > 0) {
-        refreshAfterToolCalls()
+      // Surface tool errors on the assistant message so the user sees
+      // a "⚠ tool error" indicator even when Claude's text paraphrases
+      // over the failure.
+      const toolErrors: ToolErrorSummary[] = (usageEvent?.toolCalls ?? [])
+        .filter((t) => {
+          const r = t.result as { success?: boolean } | null
+          return !!r && r.success === false
+        })
+        .map((t) => {
+          const r = t.result as { error?: string; code?: string } | null
+          return {
+            tool: t.name,
+            code: r?.code,
+            message: r?.error ?? 'Tool failed',
+          }
+        })
+      if (toolErrors.length > 0) {
+        set((state) => ({
+          messages: state.messages.map((m) =>
+            m.id === assistantId ? { ...m, toolErrors } : m,
+          ),
+        }))
       }
+
+      // Refetch only the stores the function reports as affected.
+      // Read-only turns (search/find/summarize) get zero refetches;
+      // writes get exactly the stores they touched.
+      refreshAffected(usageEvent?.affectedEntities)
     } catch (err) {
       // Cancel any pending RAF flush — no more content coming.
       if (rafId != null) {
@@ -342,12 +411,61 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       )
 
       // Even on error, any tool calls that completed before the error
-      // committed to the DB. Refresh so the user sees the partial work
-      // rather than a misleading "nothing changed" UI.
-      if (usageEvent?.toolCalls && usageEvent.toolCalls.length > 0) {
-        refreshAfterToolCalls()
-      }
+      // committed to the DB. Refresh affected stores so the user sees
+      // the partial work rather than a misleading "nothing changed" UI.
+      refreshAffected(usageEvent?.affectedEntities)
     }
+  },
+
+  confirmPendingAction: async (assistantMessageId) => {
+    const state = get()
+    const message = state.messages.find((m) => m.id === assistantMessageId)
+    if (!message?.pendingAction) return
+    if (message.pendingAction.resolution) return // already resolved
+    if (state.isStreaming) return // another stream in flight
+
+    const { summary, action } = message.pendingAction
+
+    // Flip the card to its resolved state so the history reads as
+    // "Confirmed ✓" rather than a still-live button pair.
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === assistantMessageId && m.pendingAction
+          ? { ...m, pendingAction: { ...m.pendingAction, resolution: 'confirmed' } }
+          : m,
+      ),
+    }))
+
+    // Programmatic follow-up user message. Contains the summary
+    // verbatim so the conversation history preserves the audit trail
+    // (who confirmed what, at what time).
+    await get().sendUserMessage(
+      `Confirmed: ${summary.replace(/\.$/, '')}. Go ahead with ${action}.`,
+    )
+  },
+
+  cancelPendingAction: async (assistantMessageId) => {
+    const state = get()
+    const message = state.messages.find((m) => m.id === assistantMessageId)
+    if (!message?.pendingAction) return
+    if (message.pendingAction.resolution) return
+    if (state.isStreaming) return
+
+    const { summary } = message.pendingAction
+
+    set((s) => ({
+      messages: s.messages.map((m) =>
+        m.id === assistantMessageId && m.pendingAction
+          ? { ...m, pendingAction: { ...m.pendingAction, resolution: 'cancelled' } }
+          : m,
+      ),
+    }))
+
+    await get().sendUserMessage(
+      `Cancelled: don't ${summary
+        .replace(/^Delete /i, 'delete ')
+        .replace(/\.$/, '')}. Leave things as they are.`,
+    )
   },
 
   clearReaction: () => set({ currentReaction: null }),
@@ -378,6 +496,11 @@ interface StreamEvent {
     status?: number
     message?: string
   }
+  // ─── eidrix_pending_action fields ──────────────────────────────────
+  action?: string
+  params?: unknown
+  summary?: string
+  confirmationToken?: string
   // ─── eidrix_usage fields (only present when type === 'eidrix_usage') ──
   model?: AgentModel
   contextMode?: 'off' | 'subset' | 'full'
@@ -403,6 +526,8 @@ interface StreamEvent {
   }[]
   iterations?: number
   hitIterationCap?: boolean
+  uiContext?: UiContext | null
+  affectedEntities?: string[]
 }
 
 /**
@@ -440,6 +565,8 @@ function buildDebugEntry(
     toolCalls: usageEvent?.toolCalls ?? [],
     iterations: usageEvent?.iterations ?? 1,
     hitIterationCap: usageEvent?.hitIterationCap ?? false,
+    uiContext: usageEvent?.uiContext ?? null,
+    affectedEntities: usageEvent?.affectedEntities ?? [],
   }
 }
 

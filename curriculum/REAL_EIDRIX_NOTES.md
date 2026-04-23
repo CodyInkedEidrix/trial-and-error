@@ -143,6 +143,34 @@ Structure:
 - **Conversation history is the in-session "memory"** — no separate memory layer at this stage. Context-mode toggles affect ONLY the injected business-data block; previous assistant responses in the messages array still convey domain knowledge from earlier turns. Persistent cross-session memory is AC-04.
 - **Observability is a first-class feature, not a debug afterthought.** The Agent Debug tab (dev-only via `VITE_DEV_MODE`) shows the full system prompt sent, the messages array, the response, token counts, response time, and per-request cost. Real Eidrix preserves this pattern as an internal/admin surface — exposed to support staff, not end users.
 - **Cumulative session cost** displayed in the Debug tab. Visceral cost feedback during testing trains the discipline of not leaving Opus on for casual chat.
+- **Ambient workspace overview** is always injected into the system prompt regardless of `context_mode`. Six-line aggregate block: customer/job/proposal counts broken down by status. O(1) in tenant size (grouped counts, not row data), scales cleanly to millions of rows. Rationale: even with `context_mode = 'off'`, the agent needs a sense of the workspace SHAPE — "how many leads?" should be answerable without a tool round trip. Adding 6 tokens of orientation to every request dramatically improves tool choice and lets broad operator questions ("what should I focus on today?") have something to ground against. See Chat & Agent Behavior > Layered context model below.
+
+### Layered context model (post-ambient-overview refactor)
+
+The `off` / `subset` / `full` mental model proved too flat. What the agent actually sees is a STACK of independently-toggled layers, each with its own cost curve:
+
+| Layer | What | Token size | Always on? | Cost scaling |
+|---|---|---|---|---|
+| Voice + rules | `settings.system_prompt` | ~300 tokens | ✅ | O(1) |
+| UI context | Where the user is looking (tab, record, section) | ~50 tokens | ✅ | O(1) |
+| **Workspace overview** | Aggregate counts by status across all entities | ~30 tokens | ✅ | O(1) |
+| Business data — subset | Recent customers + open-status jobs + their relations | ~hundreds | opt-in | O(active work) |
+| Business data — full | Every customer + every job | ~thousands-to-millions | opt-in | O(total rows) |
+| *(future)* Record-scoped | Full record data for whatever's on screen | ~100 tokens | ✅ when a record is open | O(1) |
+| *(future)* Recent-activity | Last N minutes of mutations | ~100-500 tokens | opt-in | O(activity rate) |
+
+The three always-on layers combine to ~400 tokens — a fixed cost that scales to any tenant size. Opt-in layers are where token spend tunes to operational value.
+
+**Real Eidrix implementation path:**
+1. Ship the always-on layers (voice, UI context, overview) — DONE as of AC-03 + this follow-up
+2. Build record-scoped auto-inject: when `activeRecord` is present, inject the full record's row data (not just id/name). "His jobs" stops needing a tool call.
+3. Add Anthropic prompt caching for the subset/full blocks — 5-minute TTL, 10% of input cost on cache hit. This makes full-mode viable on moderately-sized tenants where it was previously prohibitive.
+4. Revisit the Settings UX — the 3-way toggle may become a layered checklist ("include UI-scoped data", "include recent activity", "include full data") rather than off/subset/full.
+
+**Open questions:**
+- At what tenant size does the overview's aggregate query cost matter? Today we fetch `id + status` for each entity; at 100k+ rows it becomes a ≥100ms query. Fallback: a dedicated aggregates view refreshed via trigger, read in O(1).
+- Should overview include time-window counts ("3 customers added this week")? Useful for operator orientation; adds complexity.
+- Query-classifier approach: a tiny pre-call that classifies the user's query and injects only the relevant slice. Probably overkill until tenant data is huge.
 
 **Open questions:**
 - Chat scope: one global conversation, one per record, or one per "session" where user can name them?
@@ -309,3 +337,4 @@ The signature onboarding flow for real Eidrix. Deserves its own section because 
 - **April 23, 2026** — AC-02 (Context-Aware Chat) shipped. Jobs entity added (relational to Customers, mirrors the customers store/RLS pattern exactly — first proof point that the entity template repeats cleanly). `agent_settings` table per org holds system_prompt + context_mode + model. Chat function reads settings at request time via JWT-pass-through, fetches business data RLS-scoped, injects as STRUCTURED text (pipes/dashes/totals — not prose). Three context modes: off / smart subset / full. Agent Debug tab provides per-request observability with token counts, response time, and cumulative session cost — gated by `VITE_DEV_MODE` build-time flag. Sonnet 4.6 is now the production default; Haiku 4.5 and Opus 4.7 also available. Anthropic naming convention shift noted (alias = pinned ID for 4.6/4.7 generation).
 - **April 23, 2026** — AC-03 Session 1 (Agentic Foundation) shipped. Proposals entity added as the third rep of the Customer/Job template. 18 tools defined across customers/jobs/proposals + a general summarizeForCustomer. Server-side tool execution loop in `chat.ts` with streaming forward (text events) and buffered tool_use events. MAX_ITERATIONS=10 cap. DEFAULT_CONTEXT_MODE flipped to 'off' — with tools available, on-demand discovery beats preloaded data at scale. Client-side refresh after tool calls.
 - **April 23, 2026** — AC-03 Session 2 (Agentic Behavior Layer) shipped. UI context injection (snapshotUiContext + prompt block between base prompt and data). Cryptographic HMAC confirmation tokens for destructive tools (not a `confirmed: boolean` flag — server-enforced two-phase commit so LLM cooperation isn't the security boundary). Inline Confirm/Cancel card in chat, resolved state preserved as audit trail. Targeted refresh via `affectedEntities` from the function — read-only turns cost zero refetches. Hardening layer: input validation (email/phone/amount/length/UUID), result size caps (100 default, 50 nested, 20 fuzzy), destructive-commit rate cap (3/request), structured tool-error visibility in chat. Agent Debug tab upgraded with UI-context grid and full tool-trace timeline. AC-03 complete.
+- **April 23, 2026** — Ambient workspace overview shipped as a follow-up. Always-on aggregate block (customer/job/proposal counts by status) injected into the system prompt regardless of `context_mode`. O(1) in tenant size. Fixes the "off mode is flying blind" problem without compromising the tools-fetch-row-data discipline. Introduced the Layered Context Model in this document — reframes context injection from a 3-way toggle to a stack of layers, each independently sized and toggleable.

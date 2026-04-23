@@ -107,6 +107,25 @@ export interface DebugEntry {
    *  debugging and for verifying the targeted-refresh is actually
    *  targeted. */
   affectedEntities: string[]
+
+  // ─── AC-04 Session 2 — agent memory retrieval ────────────────────
+  /** Facts retrieved from memory via hybrid semantic search for this
+   *  turn, already ranked by similarity. Debug tab renders this as a
+   *  table with color-coded similarity scores — lets you see what
+   *  Claude had access to from accumulated memory. Empty array means
+   *  no facts retrieved (fresh user, too-short message, or no
+   *  relevant matches). */
+  retrievedMemories: RetrievedMemoryEntry[]
+}
+
+export interface RetrievedMemoryEntry {
+  factId: string
+  content: string
+  factType: string
+  entityType: string | null
+  entityId: string | null
+  confidence: number
+  similarity: number
 }
 
 export interface ToolCallEntry {

@@ -27,6 +27,7 @@ import {
   type AgentModel,
 } from '../../types/agentSettings'
 import Button from '../ui/Button'
+import MemoryPanel from './memory/MemoryPanel'
 
 const CONTEXT_OPTIONS: { value: ContextMode; label: string }[] = [
   { value: 'off', label: 'Off (tool-driven)' },
@@ -298,6 +299,9 @@ export default function SettingsView() {
             )
           })()}
         </section>
+
+        {/* ─── Memory (AC-04 Session 2) ───────────────────────────── */}
+        <MemoryPanel />
 
         {/* ─── Sign out ───────────────────────────────────────────── */}
         <section className="flex items-center justify-between bg-obsidian-900 border border-obsidian-800 rounded-lg p-6">

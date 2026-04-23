@@ -59,7 +59,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 - [x] AC-01 — Streaming Chat Foundation ⭐ (requires Ch 11, Ch 13)
 - [x] AC-02 — Context-Aware Chat (requires AC-01, Ch 10 or Ch 14)
 - [x] AC-03 — Agentic Foundation ⭐⭐ (requires AC-02, Ch 14)
-- [ ] AC-04 — Agent Memory & Persistence (requires AC-01, Ch 14)
+- [x] AC-04 — Agent Memory & Persistence (requires AC-01, Ch 14)
 - [ ] AC-05 — Multi-Turn Agentic Loops (requires AC-03)
 - [x] AC-06 — Command Palette (cmd+K) (requires Ch 8)
 - [ ] AC-07 — Keyboard Shortcuts (requires Ch 11, AC-06 recommended)
@@ -77,6 +77,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** AC-04 — Agent Memory & Persistence (next per locked execution order)
+**Currently on:** AC-05 — Multi-Turn Agentic Loops (next per locked execution order)
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

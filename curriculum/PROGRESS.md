@@ -27,7 +27,7 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ### Phase 3 — Going Real
 - [x] Chapter 13 — Environment Variables
-- [ ] Chapter 14 — Supabase Foundation
+- [x] Chapter 14 — Supabase Foundation
 
 ### Phase 4 — Completion
 - [ ] Chapter 15 — Files & Images
@@ -77,6 +77,6 @@ The full curriculum architecture and locked execution order live in [CURRICULUM_
 
 ---
 
-**Currently on:** Chapter 14 — Supabase Foundation
+**Currently on:** AC-02 — Context-Aware Chat
 
 *The locked execution order is defined in [CURRICULUM_DESIGN.md](CURRICULUM_DESIGN.md). When in doubt, follow it.*

@@ -1,15 +1,17 @@
 // ──────────────────────────────────────────────────────────────────────
 // Message — shape of a single chat message.
 //
-// AC-01-ready by design. `role` matches the Anthropic Messages API
-// exactly (no transform needed when AC-01 sends history to the model).
-// `status` is the flag that gets flipped during streaming — AC-01 will
-// set 'streaming' while a response is being chunked in, then 'complete'.
+// Post AC-04 Session 1, messages are DB-backed. Every row in the
+// `messages` Postgres table maps to a Message; the store's in-memory
+// array mirrors the current conversation. `role` matches the Anthropic
+// Messages API exactly; `status` drives streaming-vs-complete UI
+// distinctions.
 //
-// ─── Porting to real Eidrix ───────────────────────────────────────────
-// When AC-04 adds persistent memory, this shape serializes cleanly
-// (all primitives, ISO strings). A `conversationId: string` field will
-// be added at that point to support multi-conversation storage.
+// ─── Tool interactions ───────────────────────────────────────────────
+// Tool calls and tool results live inside `metadata.toolCalls` on
+// assistant messages, not as separate rows. Keeps row counts predictable
+// and keeps fact-extraction targets clean (only user + assistant text
+// is ever extracted from).
 // ──────────────────────────────────────────────────────────────────────
 
 export type MessageRole = 'user' | 'assistant'
@@ -49,6 +51,41 @@ export interface ToolErrorSummary {
   message: string
 }
 
+/** Free-form metadata attached to a persisted message. Schema is not
+ *  enforced at the DB level (stored as jsonb); we keep it loose so
+ *  future additions don't require migrations. The Debug tab reads
+ *  selected fields; fact extraction ignores it entirely. */
+export interface MessageMetadata {
+  // Assistant-message fields (from the chat function's eidrix_usage event).
+  model?: string
+  contextMode?: 'off' | 'subset' | 'full'
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadInputTokens?: number
+  cacheCreationInputTokens?: number
+  systemPromptBytes?: number
+  responseTimeMs?: number
+  toolCalls?: Array<{
+    name: string
+    input: unknown
+    result: unknown
+    durationMs: number
+    iteration: number
+  }>
+  iterations?: number
+  hitIterationCap?: boolean
+  affectedEntities?: string[]
+  errorMessage?: string | null
+
+  // ─── UX overlays (AC-04 Session 1) ─────────────────────────────────
+  // Persisted in metadata (rather than separate columns) so they survive
+  // messagesStore resync without a schema migration. The chat UI reads
+  // top-level Message.pendingAction/toolErrors; messagesStore.dbRowToMessage
+  // promotes these metadata fields up to those top-level shapes at load.
+  pendingAction?: PendingAction
+  toolErrors?: ToolErrorSummary[]
+}
+
 export interface Message {
   id: string
   role: MessageRole
@@ -57,6 +94,15 @@ export interface Message {
   createdAt: string
   /** Omitted = 'complete'. Set explicitly for streaming / error states. */
   status?: MessageStatus
+  /** FK to the conversation this message belongs to. Optional on the
+   *  client-side shape so transient in-flight messages (before persist)
+   *  compile; always set on persisted messages. */
+  conversationId?: string
+  /** Tokens, tool calls, response time, etc. See MessageMetadata. */
+  metadata?: MessageMetadata
+  /** Soft-delete flag. Present on persisted messages; omitted on
+   *  in-flight streaming placeholders. */
+  isActive?: boolean
   /** Present when the server sent an `eidrix_pending_action` event for
    *  this assistant turn. Rendered inline by the chat UI as a
    *  Confirm / Cancel card. */

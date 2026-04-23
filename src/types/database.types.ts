@@ -34,6 +34,41 @@ export type Database = {
   }
   public: {
     Tables: {
+      agent_settings: {
+        Row: {
+          context_mode: Database["public"]["Enums"]["context_mode"]
+          model: Database["public"]["Enums"]["agent_model"]
+          organization_id: string
+          system_prompt: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          context_mode?: Database["public"]["Enums"]["context_mode"]
+          model?: Database["public"]["Enums"]["agent_model"]
+          organization_id: string
+          system_prompt: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          context_mode?: Database["public"]["Enums"]["context_mode"]
+          model?: Database["public"]["Enums"]["agent_model"]
+          organization_id?: string
+          system_prompt?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agent_settings_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: true
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null
@@ -86,6 +121,60 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "customers_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      jobs: {
+        Row: {
+          amount: number | null
+          created_at: string
+          customer_id: string
+          id: string
+          notes: string | null
+          organization_id: string
+          scheduled_date: string | null
+          status: Database["public"]["Enums"]["job_status"]
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string
+          customer_id: string
+          id?: string
+          notes?: string | null
+          organization_id: string
+          scheduled_date?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string
+          customer_id?: string
+          id?: string
+          notes?: string | null
+          organization_id?: string
+          scheduled_date?: string | null
+          status?: Database["public"]["Enums"]["job_status"]
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "jobs_customer_id_fkey"
+            columns: ["customer_id"]
+            isOneToOne: false
+            referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "jobs_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
@@ -160,7 +249,18 @@ export type Database = {
       is_member_of: { Args: { target_org: string }; Returns: boolean }
     }
     Enums: {
+      agent_model:
+        | "claude-haiku-4-5-20251001"
+        | "claude-sonnet-4-6"
+        | "claude-opus-4-7"
+      context_mode: "off" | "subset" | "full"
       customer_status: "lead" | "active" | "paused" | "archived"
+      job_status:
+        | "draft"
+        | "scheduled"
+        | "in_progress"
+        | "completed"
+        | "cancelled"
       membership_role: "owner" | "admin" | "member"
     }
     CompositeTypes: {
@@ -292,7 +392,20 @@ export const Constants = {
   },
   public: {
     Enums: {
+      agent_model: [
+        "claude-haiku-4-5-20251001",
+        "claude-sonnet-4-6",
+        "claude-opus-4-7",
+      ],
+      context_mode: ["off", "subset", "full"],
       customer_status: ["lead", "active", "paused", "archived"],
+      job_status: [
+        "draft",
+        "scheduled",
+        "in_progress",
+        "completed",
+        "cancelled",
+      ],
       membership_role: ["owner", "admin", "member"],
     },
   },

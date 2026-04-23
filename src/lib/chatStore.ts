@@ -25,6 +25,7 @@ import type {
   ReactionName,
 } from '../components/brand/eye-config'
 import type { Message, MessageStatus } from '../types/message'
+import { supabase } from './supabase'
 
 // ─── Utilities ───────────────────────────────────────────────────────
 
@@ -139,10 +140,20 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     }
 
     // ─── Fire the fetch ───────────────────────────────────────────
+    // AC-02: forward the user's Supabase JWT so the function can
+    // create an RLS-scoped client and read agent_settings + business
+    // data on the user's behalf. Without this, the function returns
+    // 401 Unauthenticated.
+    const { data: sessionData } = await supabase.auth.getSession()
+    const accessToken = sessionData?.session?.access_token ?? ''
+
     try {
       const response = await fetch('/.netlify/functions/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`,
+        },
         body: JSON.stringify({ messages: messagesForApi }),
       })
 

@@ -22,6 +22,7 @@ import { formatRelative } from '../lib/relativeTime'
 import LabView from '../components/views/LabView'
 import ChatView from '../components/views/ChatView'
 import SettingsView from '../components/views/SettingsView'
+import AgentDebugTab from '../components/views/AgentDebugTab'
 import ComponentsTab from '../components/ComponentsTab'
 import BrandTab from '../components/BrandTab'
 import StatusBadge from '../components/records/StatusBadge'
@@ -298,6 +299,12 @@ function JobCustomerCell({ job }: { job: Job }) {
 }
 
 // ─── The contractor config ────────────────────────────────────────────
+// VITE_DEV_MODE controls whether the Agent Debug tab is included.
+// Build-time evaluated — change requires a Vite restart (local) or a
+// new deploy (production). Set per Netlify deploy context: 'true' for
+// local + deploy previews, 'false' (or unset) for production.
+
+const isDevMode = import.meta.env.VITE_DEV_MODE === 'true'
 
 export const contractorConfig: BusinessConfig = {
   id: 'contractor',
@@ -325,5 +332,15 @@ export const contractorConfig: BusinessConfig = {
     }),
     { id: 'chat', label: 'Chat', kind: 'custom', Component: ChatView },
     { id: 'settings', label: 'Settings', kind: 'custom', Component: SettingsView },
+    ...(isDevMode
+      ? [
+          {
+            id: 'agent-debug',
+            label: 'Agent Debug',
+            kind: 'custom' as const,
+            Component: AgentDebugTab,
+          },
+        ]
+      : []),
   ],
 }

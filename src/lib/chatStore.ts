@@ -25,7 +25,9 @@ import type {
   ReactionName,
 } from '../components/brand/eye-config'
 import type { Message, MessageStatus } from '../types/message'
+import type { AgentModel } from '../types/agentSettings'
 import { supabase } from './supabase'
+import { useDebugStore } from './debugStore'
 
 // ─── Utilities ───────────────────────────────────────────────────────
 
@@ -114,6 +116,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     // token rate — smooth without throttling the stream itself.
     let pendingText = ''
     let rafId: number | null = null
+    // Tracked across the whole submit() so both success and error
+    // paths can push a complete DebugEntry. Declared here (not inside
+    // try) so the catch block has access to them.
+    let accumulatedResponse = ''
+    let usageEvent: StreamEvent | null = null
 
     // Append a text chunk to the in-progress assistant message. Used by
     // both the RAF flusher (streaming happy path) and the final sync
@@ -212,7 +219,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
               set({ currentEyeState: 'speaking' })
             }
             pendingText += event.delta.text
+            accumulatedResponse += event.delta.text
             scheduleFlush()
+          } else if (event.type === 'eidrix_usage') {
+            // Final summary event from the function. Captured for the
+            // Debug tab; doesn't affect the streamed message UI.
+            usageEvent = event
           } else if (event.type === 'error') {
             throw new StreamError(
               event.error?.status ?? 500,
@@ -258,6 +270,32 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         currentEyeState: 'idle',
         currentReaction: 'completion',
       }))
+
+      // Push debug entry for the Agent Debug tab. usageEvent should
+      // always be present after a successful stream (the function
+      // always emits it before close), but guard anyway.
+      if (usageEvent) {
+        useDebugStore.getState().pushEntry({
+          userMessagePreview: trimmed,
+          systemPromptSent: usageEvent.systemPromptSent ?? '',
+          messagesSent: messagesForApi as { role: 'user' | 'assistant'; content: string }[],
+          responseText: accumulatedResponse,
+          model: usageEvent.model ?? ('claude-sonnet-4-6' as AgentModel),
+          contextMode: usageEvent.contextMode ?? 'subset',
+          inputTokens: usageEvent.inputTokens ?? 0,
+          outputTokens: usageEvent.outputTokens ?? 0,
+          cacheReadInputTokens: usageEvent.cacheReadInputTokens ?? 0,
+          cacheCreationInputTokens: usageEvent.cacheCreationInputTokens ?? 0,
+          systemPromptBytes: usageEvent.systemPromptBytes ?? 0,
+          customerCount: usageEvent.customerCount ?? 0,
+          jobCount: usageEvent.jobCount ?? 0,
+          totalCustomers: usageEvent.totalCustomers ?? 0,
+          totalJobs: usageEvent.totalJobs ?? 0,
+          contextWarning: usageEvent.contextWarning ?? null,
+          responseTimeMs: usageEvent.responseTimeMs ?? 0,
+          errorMessage: null,
+        })
+      }
     } catch (err) {
       // Cancel any pending RAF flush — no more content coming.
       if (rafId != null) {
@@ -286,6 +324,31 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         currentEyeState: 'idle',
         currentReaction: 'uncertainty',
       }))
+
+      // Push a debug entry for the error too — the Debug tab is most
+      // useful when something went wrong, so don't drop these.
+      const errorMessage =
+        err instanceof Error ? err.message : 'Unknown error'
+      useDebugStore.getState().pushEntry({
+        userMessagePreview: trimmed,
+        systemPromptSent: usageEvent?.systemPromptSent ?? '',
+        messagesSent: messagesForApi as { role: 'user' | 'assistant'; content: string }[],
+        responseText: accumulatedResponse,
+        model: usageEvent?.model ?? ('claude-sonnet-4-6' as AgentModel),
+        contextMode: usageEvent?.contextMode ?? 'subset',
+        inputTokens: usageEvent?.inputTokens ?? 0,
+        outputTokens: usageEvent?.outputTokens ?? 0,
+        cacheReadInputTokens: usageEvent?.cacheReadInputTokens ?? 0,
+        cacheCreationInputTokens: usageEvent?.cacheCreationInputTokens ?? 0,
+        systemPromptBytes: usageEvent?.systemPromptBytes ?? 0,
+        customerCount: usageEvent?.customerCount ?? 0,
+        jobCount: usageEvent?.jobCount ?? 0,
+        totalCustomers: usageEvent?.totalCustomers ?? 0,
+        totalJobs: usageEvent?.totalJobs ?? 0,
+        contextWarning: usageEvent?.contextWarning ?? null,
+        responseTimeMs: usageEvent?.responseTimeMs ?? 0,
+        errorMessage,
+      })
     }
   },
 
@@ -303,8 +366,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 // ─── Support types ───────────────────────────────────────────────────
 
 /**
- * Minimal typing over the forwarded Anthropic SSE events we care about.
- * Unknown event types still parse — the reader simply ignores them.
+ * Minimal typing over the forwarded Anthropic SSE events + Eidrix's
+ * own `eidrix_usage` final event (added by chat.ts in AC-02). Unknown
+ * event types still parse — the reader simply ignores them.
  */
 interface StreamEvent {
   type: string
@@ -316,6 +380,21 @@ interface StreamEvent {
     status?: number
     message?: string
   }
+  // ─── eidrix_usage fields (only present when type === 'eidrix_usage') ──
+  model?: AgentModel
+  contextMode?: 'off' | 'subset' | 'full'
+  inputTokens?: number
+  outputTokens?: number
+  cacheReadInputTokens?: number
+  cacheCreationInputTokens?: number
+  systemPromptBytes?: number
+  customerCount?: number
+  jobCount?: number
+  totalCustomers?: number
+  totalJobs?: number
+  contextWarning?: string | null
+  responseTimeMs?: number
+  systemPromptSent?: string
 }
 
 /**

@@ -164,16 +164,23 @@ export default function SettingsView() {
             )}
           </div>
 
-          {isLoading && !settings ? (
-            <p className="font-mono text-xs text-text-tertiary uppercase tracking-wider py-8 text-center">
-              Loading settings…
-            </p>
-          ) : loadError ? (
-            <p className="font-mono text-xs text-danger-500 py-4">
-              Failed to load: {loadError}
-            </p>
-          ) : (
-            <div className="space-y-6">
+          {(() => {
+            if (isLoading && !settings) {
+              return (
+                <p className="font-mono text-xs text-text-tertiary uppercase tracking-wider py-8 text-center">
+                  Loading settings…
+                </p>
+              )
+            }
+            if (loadError) {
+              return (
+                <p className="font-mono text-xs text-danger-500 py-4">
+                  Failed to load: {loadError}
+                </p>
+              )
+            }
+            return (
+              <div className="space-y-6">
               {/* System prompt */}
               <div>
                 <label
@@ -281,7 +288,8 @@ export default function SettingsView() {
                 />
               </div>
             </div>
-          )}
+            )
+          })()}
         </section>
 
         {/* ─── Sign out ───────────────────────────────────────────── */}

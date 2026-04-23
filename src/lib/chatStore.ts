@@ -275,26 +275,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // always be present after a successful stream (the function
       // always emits it before close), but guard anyway.
       if (usageEvent) {
-        useDebugStore.getState().pushEntry({
-          userMessagePreview: trimmed,
-          systemPromptSent: usageEvent.systemPromptSent ?? '',
-          messagesSent: messagesForApi as { role: 'user' | 'assistant'; content: string }[],
-          responseText: accumulatedResponse,
-          model: usageEvent.model ?? ('claude-sonnet-4-6' as AgentModel),
-          contextMode: usageEvent.contextMode ?? 'subset',
-          inputTokens: usageEvent.inputTokens ?? 0,
-          outputTokens: usageEvent.outputTokens ?? 0,
-          cacheReadInputTokens: usageEvent.cacheReadInputTokens ?? 0,
-          cacheCreationInputTokens: usageEvent.cacheCreationInputTokens ?? 0,
-          systemPromptBytes: usageEvent.systemPromptBytes ?? 0,
-          customerCount: usageEvent.customerCount ?? 0,
-          jobCount: usageEvent.jobCount ?? 0,
-          totalCustomers: usageEvent.totalCustomers ?? 0,
-          totalJobs: usageEvent.totalJobs ?? 0,
-          contextWarning: usageEvent.contextWarning ?? null,
-          responseTimeMs: usageEvent.responseTimeMs ?? 0,
-          errorMessage: null,
-        })
+        useDebugStore.getState().pushEntry(
+          buildDebugEntry(trimmed, messagesForApi, accumulatedResponse, usageEvent, null),
+        )
       }
     } catch (err) {
       // Cancel any pending RAF flush — no more content coming.
@@ -329,26 +312,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // useful when something went wrong, so don't drop these.
       const errorMessage =
         err instanceof Error ? err.message : 'Unknown error'
-      useDebugStore.getState().pushEntry({
-        userMessagePreview: trimmed,
-        systemPromptSent: usageEvent?.systemPromptSent ?? '',
-        messagesSent: messagesForApi as { role: 'user' | 'assistant'; content: string }[],
-        responseText: accumulatedResponse,
-        model: usageEvent?.model ?? ('claude-sonnet-4-6' as AgentModel),
-        contextMode: usageEvent?.contextMode ?? 'subset',
-        inputTokens: usageEvent?.inputTokens ?? 0,
-        outputTokens: usageEvent?.outputTokens ?? 0,
-        cacheReadInputTokens: usageEvent?.cacheReadInputTokens ?? 0,
-        cacheCreationInputTokens: usageEvent?.cacheCreationInputTokens ?? 0,
-        systemPromptBytes: usageEvent?.systemPromptBytes ?? 0,
-        customerCount: usageEvent?.customerCount ?? 0,
-        jobCount: usageEvent?.jobCount ?? 0,
-        totalCustomers: usageEvent?.totalCustomers ?? 0,
-        totalJobs: usageEvent?.totalJobs ?? 0,
-        contextWarning: usageEvent?.contextWarning ?? null,
-        responseTimeMs: usageEvent?.responseTimeMs ?? 0,
-        errorMessage,
-      })
+      useDebugStore.getState().pushEntry(
+        buildDebugEntry(trimmed, messagesForApi, accumulatedResponse, usageEvent, errorMessage),
+      )
     }
   },
 
@@ -395,6 +361,41 @@ interface StreamEvent {
   contextWarning?: string | null
   responseTimeMs?: number
   systemPromptSent?: string
+}
+
+/**
+ * Build a DebugEntry payload from the captured per-request data. Used
+ * by both the success path (errorMessage = null) and the error path
+ * (errorMessage = the failure reason). Centralizes the `?? defaults`
+ * fallbacks so they stay consistent and easy to update.
+ */
+function buildDebugEntry(
+  userMessage: string,
+  messagesSent: { role: 'user' | 'assistant'; content: string }[],
+  responseText: string,
+  usageEvent: StreamEvent | null,
+  errorMessage: string | null,
+) {
+  return {
+    userMessagePreview: userMessage,
+    systemPromptSent: usageEvent?.systemPromptSent ?? '',
+    messagesSent,
+    responseText,
+    model: usageEvent?.model ?? ('claude-sonnet-4-6' as AgentModel),
+    contextMode: usageEvent?.contextMode ?? 'subset',
+    inputTokens: usageEvent?.inputTokens ?? 0,
+    outputTokens: usageEvent?.outputTokens ?? 0,
+    cacheReadInputTokens: usageEvent?.cacheReadInputTokens ?? 0,
+    cacheCreationInputTokens: usageEvent?.cacheCreationInputTokens ?? 0,
+    systemPromptBytes: usageEvent?.systemPromptBytes ?? 0,
+    customerCount: usageEvent?.customerCount ?? 0,
+    jobCount: usageEvent?.jobCount ?? 0,
+    totalCustomers: usageEvent?.totalCustomers ?? 0,
+    totalJobs: usageEvent?.totalJobs ?? 0,
+    contextWarning: usageEvent?.contextWarning ?? null,
+    responseTimeMs: usageEvent?.responseTimeMs ?? 0,
+    errorMessage,
+  }
 }
 
 /**

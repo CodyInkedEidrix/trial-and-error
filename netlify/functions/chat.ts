@@ -133,10 +133,21 @@ function createUserClient(jwt: string) {
 /** Find the user's active org via memberships. RLS scopes this to the
  *  caller. For Trial and Error each user has exactly one membership;
  *  we take the first. Real Eidrix's multi-org future stores a
- *  preferred org in user_metadata and reads that here. */
+ *  preferred org in user_metadata and reads that here.
+ *
+ *  Returns:
+ *    { kind: 'ok', orgId }       — happy path
+ *    { kind: 'none' }            — auth worked, user just has no memberships
+ *    { kind: 'error', message }  — DB/RLS failure; caller should surface 500
+ */
+type ActiveOrgResult =
+  | { kind: 'ok'; orgId: string }
+  | { kind: 'none' }
+  | { kind: 'error'; message: string }
+
 async function findActiveOrgId(
   supabase: ReturnType<typeof createUserClient>,
-): Promise<string | null> {
+): Promise<ActiveOrgResult> {
   const { data, error } = await supabase
     .from('memberships')
     .select('organization_id')
@@ -145,9 +156,38 @@ async function findActiveOrgId(
     .maybeSingle()
   if (error) {
     console.error('[chat] findActiveOrgId error:', error)
-    return null
+    return { kind: 'error', message: error.message ?? 'Membership lookup failed' }
   }
-  return data?.organization_id ?? null
+  if (!data?.organization_id) return { kind: 'none' }
+  return { kind: 'ok', orgId: data.organization_id }
+}
+
+/** Shape a DB row OR a fallback defaults stub into the AgentSettings
+ *  shape. Used by all three paths in loadAgentSettings (existing row,
+ *  lazy-upserted row, defaults fallback). */
+function mapToAgentSettings(
+  row: {
+    organization_id: string
+    system_prompt: string
+    context_mode: string
+    model: string
+  } | null,
+  orgId: string,
+): AgentSettings {
+  if (!row) {
+    return {
+      organization_id: orgId,
+      system_prompt: DEFAULT_SYSTEM_PROMPT,
+      context_mode: DEFAULT_CONTEXT_MODE,
+      model: DEFAULT_MODEL,
+    }
+  }
+  return {
+    organization_id: row.organization_id,
+    system_prompt: row.system_prompt,
+    context_mode: row.context_mode as ContextMode,
+    model: row.model,
+  }
 }
 
 /** Load agent_settings for the org. If no row exists, lazy-upsert
@@ -167,14 +207,7 @@ async function loadAgentSettings(
     // Fall through to defaults rather than blocking the chat.
   }
 
-  if (data) {
-    return {
-      organization_id: data.organization_id,
-      system_prompt: data.system_prompt,
-      context_mode: data.context_mode as ContextMode,
-      model: data.model,
-    }
-  }
+  if (data) return mapToAgentSettings(data, orgId)
 
   // Lazy upsert.
   const { data: inserted, error: insertError } = await supabase
@@ -193,20 +226,10 @@ async function loadAgentSettings(
     // Return constant defaults so the chat still works even if the
     // insert was blocked (e.g., transient DB issue). User won't see
     // their settings persisted but their message will go through.
-    return {
-      organization_id: orgId,
-      system_prompt: DEFAULT_SYSTEM_PROMPT,
-      context_mode: DEFAULT_CONTEXT_MODE,
-      model: DEFAULT_MODEL,
-    }
+    return mapToAgentSettings(null, orgId)
   }
 
-  return {
-    organization_id: inserted.organization_id,
-    system_prompt: inserted.system_prompt,
-    context_mode: inserted.context_mode as ContextMode,
-    model: inserted.model,
-  }
+  return mapToAgentSettings(inserted, orgId)
 }
 
 // ─── Context formatters ─────────────────────────────────────────────
@@ -544,16 +567,27 @@ export default async (req: Request, _context: Context) => {
     )
   }
 
-  // Active org
-  const orgId = await findActiveOrgId(supabaseForUser)
-  if (!orgId) {
+  // Active org — distinguish "no membership" (403, user-facing) from
+  // "DB/RLS error" (500, server-side issue) so debugging real auth
+  // problems isn't a wild goose chase through "missing workspace" UX.
+  const orgResult = await findActiveOrgId(supabaseForUser)
+  if (orgResult.kind === 'error') {
+    return json(
+      { error: `Workspace lookup failed: ${orgResult.message}` },
+      { status: 500 },
+    )
+  }
+  if (orgResult.kind === 'none') {
     return json(
       { error: 'No active workspace found for this user' },
       { status: 403 },
     )
   }
+  const orgId = orgResult.orgId
 
-  // Settings + context (in parallel — both depend only on orgId)
+  // Settings first (we need the context_mode), then context fetch
+  // (depends on settings.context_mode). They are NOT independent and
+  // can't be parallelized.
   const settings = await loadAgentSettings(supabaseForUser, orgId)
   const context = await buildContextPayload(supabaseForUser, settings.context_mode)
 

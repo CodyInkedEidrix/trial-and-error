@@ -21,6 +21,12 @@ import { MODEL_META, type AgentModel } from '../types/agentSettings'
 
 const MAX_ENTRIES = 10
 
+/** Cache reads bill at roughly 10% of the standard input rate. Anthropic
+ *  may shift this over time; promoted to a constant so the assumption
+ *  is greppable. Update both this and MODEL_META together if pricing
+ *  structure changes meaningfully. */
+const CACHE_READ_RATE_MULTIPLIER = 0.1
+
 interface SentMessage {
   role: 'user' | 'assistant'
   content: string
@@ -115,7 +121,7 @@ function computeCostUsd(
   const cachedInput = cacheReadInputTokens
   const inputCost =
     (standardInput * meta.inputRate) / 1_000_000 +
-    (cachedInput * meta.inputRate * 0.1) / 1_000_000 // cache reads ~10% rate
+    (cachedInput * meta.inputRate * CACHE_READ_RATE_MULTIPLIER) / 1_000_000
   const outputCost = (outputTokens * meta.outputRate) / 1_000_000
   return inputCost + outputCost
 }

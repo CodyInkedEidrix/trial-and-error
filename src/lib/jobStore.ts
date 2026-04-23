@@ -51,6 +51,16 @@ export interface JobStore {
 
 // ─── DB ↔ App mapping ────────────────────────────────────────────────
 
+/** Postgres `numeric` comes back as either number or string from PG;
+ *  supabase-js currently returns number for our column shape, but
+ *  coerce defensively so future driver changes don't bite. */
+function coerceAmount(raw: unknown): number | undefined {
+  if (raw === null || raw === undefined) return undefined
+  if (typeof raw === 'string') return Number(raw)
+  if (typeof raw === 'number') return raw
+  return undefined
+}
+
 function dbRowToJob(row: DbJobRow): Job {
   return {
     id: row.id,
@@ -58,15 +68,7 @@ function dbRowToJob(row: DbJobRow): Job {
     title: row.title,
     status: row.status as JobStatus,
     scheduledDate: row.scheduled_date ?? undefined,
-    // Postgres `numeric` comes back as either number or string from PG;
-    // supabase-js currently returns number for our column shape, but
-    // coerce defensively so future driver changes don't bite.
-    amount:
-      row.amount === null || row.amount === undefined
-        ? undefined
-        : typeof row.amount === 'string'
-          ? Number(row.amount)
-          : row.amount,
+    amount: coerceAmount(row.amount),
     notes: row.notes ?? undefined,
     createdAt: row.created_at,
     updatedAt: row.updated_at,

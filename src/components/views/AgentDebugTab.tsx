@@ -17,7 +17,21 @@
 import { useState } from 'react'
 
 import { useDebugStore, type DebugEntry } from '../../lib/debugStore'
-import { MODEL_META } from '../../types/agentSettings'
+import { MODEL_META, type ContextMode } from '../../types/agentSettings'
+
+/** Pill colors for the context-mode badge. Off is muted, subset is
+ *  cool/cobalt (the production default), full is hot/ember (heavier
+ *  data injection — visually flags the cost premium). */
+function contextBadgeClasses(mode: ContextMode): string {
+  switch (mode) {
+    case 'off':
+      return 'bg-obsidian-700 text-text-tertiary'
+    case 'subset':
+      return 'bg-cobalt-500/15 text-cobalt-500'
+    case 'full':
+      return 'bg-ember-700/30 text-ember-300'
+  }
+}
 
 function formatUsd(n: number): string {
   if (n < 0.0001) return '$0.0000'
@@ -134,13 +148,7 @@ function DebugEntryRow({ entry }: { entry: DebugEntry }) {
           {entry.userMessagePreview}
         </span>
         <span
-          className={`font-mono text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${
-            entry.contextMode === 'off'
-              ? 'bg-obsidian-700 text-text-tertiary'
-              : entry.contextMode === 'subset'
-                ? 'bg-cobalt-500/15 text-cobalt-500'
-                : 'bg-ember-700/30 text-ember-300'
-          }`}
+          className={`font-mono text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full ${contextBadgeClasses(entry.contextMode)}`}
         >
           {entry.contextMode}
         </span>

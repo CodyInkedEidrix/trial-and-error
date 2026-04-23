@@ -11,7 +11,7 @@
 3. **Using a production library thoughtfully** — how to reach for a battle-tested library without giving up control of the design
 4. **Filter-as-you-type** — live filtering a list as the user types, in under 50ms
 5. **Action systems** — defining what commands exist in your app as structured data, so they can be searched, categorized, and executed uniformly
-6. **Command-palette patterns that transfer to agentic chat** — the same "actions defined as data" pattern shows up in AC-03 (Tool Calling) and AC-16 (Agentic Subagents)
+6. **Command-palette patterns that transfer to agentic chat** — the same "actions defined as data" pattern shows up in AC-03 (Agentic Foundation) and AC-16 (Agentic Subagents)
 
 ---
 
@@ -307,7 +307,7 @@ You shipped a real power-user feature. Not a showcase, not a demo — an actual 
 
 More importantly, you built two patterns you'll reuse constantly:
 
-**1. The "actions as data" pattern.** Every command is a structured object with a name, description, and execute function. This exact same pattern shows up in AC-03 (Tool Calling, where AI tools are defined the same way) and AC-16 (Agentic Subagents, where agents have scoped action sets). You just learned the data structure at the heart of agentic AI.
+**1. The "actions as data" pattern.** Every command is a structured object with a name, description, and execute function. This exact same pattern shows up in AC-03 (Agentic Foundation, where the agent's tools are defined the same way) and AC-16 (Agentic Subagents, where agents have scoped action sets). You just learned the data structure at the heart of agentic AI.
 
 **2. The "global overlay" pattern.** Next time you need a modal (confirm dialogs, image viewers, settings overlays), you already know the ingredients: a provider or lifted state, a backdrop, a focus trap, an Escape handler, mount/unmount animations.
 

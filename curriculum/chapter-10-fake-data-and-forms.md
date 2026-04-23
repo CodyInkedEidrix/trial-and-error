@@ -243,7 +243,7 @@ More importantly: you built **the foundation every future chapter depends on**:
 - **Chapter 14** adds file uploads to customer records. Same form panel, one new field type.
 - **AC-01 (Streaming Chat)** has the Eidrix chat access to the records list, so it can reference customers by name.
 - **AC-02 (Context-Aware Chat)** injects the current record list into every AI message.
-- **AC-03 (Tool Calling)** gives the agent permission to CREATE / UPDATE / DELETE these records via natural language. "Add John Smith at 555-1234" → new row appears.
+- **AC-03 (Agentic Foundation)** gives the agent permission to CREATE / UPDATE / DELETE these records via natural language. "Add John Smith at 555-1234" → new row appears.
 - **AC-11 (Optimistic UI)** applies polish to the save/delete animations you just built.
 - **AC-12 (Fuzzy Search)** adds search across the customer list.
 - **AC-13 (Real-Time Presence)** shows which customers are being edited by other users.

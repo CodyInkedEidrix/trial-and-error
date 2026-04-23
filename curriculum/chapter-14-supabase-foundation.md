@@ -486,7 +486,7 @@ This is the mindset shift that separates "app I'm building for myself" from "Saa
 - **Analytics** become organization-scoped ("how many active orgs last week" not "how many individual sign-ins")
 - **Admin actions** become organization-level (suspend an organization, not a user)
 
-You'll feel this mindset shift continue through every future chapter. AC-02 (Context-Aware Chat) injects customer data — but it injects the *user's active org's* customer data. AC-03 (Tool Calling) gives Claude permission to create customers — but only in the user's active org. Real Eidrix's "Sunday Interview" configures a new *organization's* workspace, not a user's.
+You'll feel this mindset shift continue through every future chapter. AC-02 (Context-Aware Chat) injects customer data — but it injects the *user's active org's* customer data. AC-03 (Agentic Foundation) gives Claude permission to create customers — but only in the user's active org. Real Eidrix's "Sunday Interview" configures a new *organization's* workspace, not a user's.
 
 Multi-tenancy isn't a feature. It's the shape of the whole product.
 
@@ -541,7 +541,7 @@ Real Eidrix will have the same rhythm. Every schema change is a migration. Every
 **AC-02 — Context-Aware Chat.** The AI gets aware of your customer data. Asking "who are my most recent customers?" returns real answers because the chat function injects customer records into Claude's context. The first chapter where Eidrix becomes *useful*, not just *present*. About 2-3 hours.
 
 After AC-02:
-- **AC-03 — Tool Calling.** THE chapter. Claude gets permission to create/update/delete customers via natural language. Agentic Eidrix begins here. ~4 hours.
+- **AC-03 — Agentic Foundation.** THE chapter. Claude gets permission to create/update/delete customers via natural language. Agentic Eidrix begins here. ~4 hours.
 - **AC-04 — Agent Memory.** Cross-session persistent memory. The hybrid (Postgres + vector) pattern from REAL_EIDRIX_NOTES.md gets rehearsed. ~3-4 hours.
 - **AC-05 — Multi-Turn Loops.** Agent takes multiple steps for one request. "Plan my Thursday" becomes real. ~2 hours.
 

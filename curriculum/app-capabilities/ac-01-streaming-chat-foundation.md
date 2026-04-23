@@ -64,7 +64,7 @@ Three reasons:
 
 **1. It's the first chapter where your app actually does something intelligent.** Every interaction before this was deterministic — you click X, the app does Y. AC-01 introduces nondeterminism: you type, and something thinks about what you said, and responds in whatever words it chooses. That's a different class of software. Apps that can think are the point of everything you've been building toward.
 
-**2. The streaming pattern transfers to every future AI chapter.** AC-02 (Context-Aware), AC-03 (Tool Calling), AC-04 (Memory), AC-05 (Multi-Turn Loops), AC-16 (Subagents) — all of them build on the streaming foundation from this chapter. Get the streaming right here, and everything downstream is an incremental addition. Get it wrong, and every future chapter fights a bad foundation.
+**2. The streaming pattern transfers to every future AI chapter.** AC-02 (Context-Aware), AC-03 (Agentic Foundation), AC-04 (Memory), AC-05 (Multi-Turn Loops), AC-16 (Subagents) — all of them build on the streaming foundation from this chapter. Get the streaming right here, and everything downstream is an incremental addition. Get it wrong, and every future chapter fights a bad foundation.
 
 **3. Streaming is what separates "good enough" AI apps from great ones.** Apps that wait for the full response and show it all at once feel sluggish, even if they're objectively fast. Apps that stream tokens feel alive, even when they're slower. The perception difference is huge. Every AI app you actually enjoy using (Claude.ai, Cursor, Perplexity, v0) streams. Amateur AI apps don't. You're about to be in the "does it right" camp.
 
@@ -497,7 +497,7 @@ For now, the system prompt in `chat.ts` is your first draft of the Eidrix voice.
 **AC-02 — Context-Aware Chat.** The agent becomes aware of your actual data. The customer records from Chapter 10 get injected into the conversation context. Asking "who haven't I contacted in 30 days?" returns real answers based on your records. This is where Eidrix starts being useful, not just conversant.
 
 After AC-02 the roadmap opens up fast:
-- **AC-03 — Tool Calling.** Claude gets permission to actually CREATE, UPDATE, DELETE records via natural language. "Add a customer named John Smith at 555-1234" — and a new row appears in your Records tab. The agentic moment.
+- **AC-03 — Agentic Foundation.** Claude gets permission to actually CREATE, UPDATE, DELETE records via natural language. "Add a customer named John Smith at 555-1234" — and a new row appears in your Records tab. The agentic moment.
 - **AC-04 — Agent Memory.** Conversations persist across sessions. Eidrix remembers what you talked about yesterday.
 - **AC-05 — Multi-Turn Loops.** The agent can take multiple steps for one request. "Plan my Thursday" triggers a sequence: check schedule, check pending jobs, draft priorities, ask for confirmation.
 - **AC-16 — Agentic Subagents.** One Eidrix spawns specialized subagents for complex tasks. Still a ways off, but the foundation is what you just shipped.

@@ -75,9 +75,9 @@ Students are free to skip à la carte items, but the prerequisites for each are 
 |---|---|---|---|
 | AC-01 | Streaming Chat Foundation | Ch 11, Ch 13 | First real AI chat. Foundation for everything agentic. |
 | AC-02 | Context-Aware Chat | AC-01, Ch 10 or Ch 14 | Chat that knows what's happening in your app. |
-| AC-03 | Tool Calling | AC-02, Ch 14 | Chat can DO things, not just talk. The agent moment. |
+| AC-03 | Agentic Foundation | AC-02, Ch 14 | The agentic moment. Tool calling for customers/jobs/proposals, UI context awareness across primary tabs, ambiguity resolution with clarification patterns, inline confirmation UI, Agent Debug tab full-trace upgrade. ~8-10 hours — the largest chapter in the curriculum. |
 | AC-04 | Agent Memory & Persistence | AC-01, Ch 14 | Conversations remembered across sessions. |
-| AC-05 | Multi-Turn Agentic Loops | AC-03 | Plan → execute → reflect → execute again. Real autonomy. |
+| AC-05 | Multi-Turn Agentic Loops | AC-03 | Complex multi-step requests that span multiple tool calls and reasoning steps (e.g., "plan my Thursday" → read schedule, prioritize, draft, confirm, execute). Builds on AC-03's tool-calling foundation. ~3-4 hours. |
 | AC-06 | Command Palette (cmd+K) | Ch 8 | Linear/Raycast/Notion-style universal search and actions. |
 | AC-07 | Keyboard Shortcuts | Ch 11, AC-06 rec | Invisible keyboard polish — Escape to close overlays, Cmd+Enter to submit, tab trapping in modals. The affordances users feel without noticing. |
 | AC-08a | The Eidrix Eye | Ch 9 | The signature living animated SVG component — six layers, four states, seven reactions. Ships to real Eidrix unchanged. |
@@ -135,7 +135,7 @@ Stars mark the biggest "milestone" moments.
 25. AC-01 Streaming Chat Foundation ⭐
 26. Chapter 14 — Supabase Foundation
 27. AC-02 Context-Aware Chat
-28. AC-03 Tool Calling ⭐⭐
+28. AC-03 Agentic Foundation ⭐⭐
 29. AC-17 Streaming UI Updates
 30. AC-04 Agent Memory & Persistence
 31. AC-05 Multi-Turn Agentic Loops
@@ -204,3 +204,4 @@ Either user finishes this and knows how to build.
 - **April 21, 2026** — Absorbed AC-14 (Toast Notifications with Actions) into Chapter 10. AC-14 was originally scheduled at position #14 but never shipped standalone; the Chapter 10 build needed a generic toast system for the undo-delete pattern, so the full AC-14 capability was built and shipped as part of position #18. Position #14 retained in the locked order with a "✓ shipped as part of Ch 10" inline marker so the historical sequence stays readable. Also established a new architectural principle in CLAUDE.md — the chat column is sovereign and overlays must scope to the tabs area. Curriculum length unchanged at 49.
 - **April 21, 2026** — Pivoted Chapter 10.5 (position #19) from "The Record-Detail Tab Pattern" (~90 min, narrow record-detail UX variant) to "The Adaptable Three-Tier Tab Engine" (~3.5 hours, config-driven architecture chapter). The new scope makes Ch 10.5 the load-bearing "same codebase, multiple products" chapter — students build a typed `BusinessConfig` + engine, then prove adaptability by swapping the active config to transform the contractor workspace into a merch seller workspace. `BusinessConfig` becomes the spec that the Sunday Interview generates, per-tenant theming (Ch 18) modifies, and agentic tool calling (AC-03) reads. Title and scope updated in PROGRESS.md and position #19 accordingly. No renumbering — slot position preserved.
 - **April 22, 2026** — Absorbed TC-02 (Web Search) and TC-03 (Image Analysis) after AC-01. Student had internalized both skills through normal curriculum progression. Kept TC-05 (Git Surgery), TC-06 (Subagents), TC-07 (Writing Custom Skills), TC-08 (CLAUDE.md Mastery), TC-09 (Skills Discovery) which teach Claude Code-specific skills not covered elsewhere. Total curriculum length reduced by 2 items (49 → 47). Tool Capabilities table rows for TC-02/TC-03 preserved with "Absorbed" markers for historical reference. All items from old position #28 (Ch 14) onward shifted -2 across Phases 3–5.
+- **April 23, 2026** — Reshaped AC-03 from "Tool Calling" to "Agentic Foundation" — consolidated tool calling mechanics, UI context awareness (primary-tab context injection), ambiguity resolution with clarification patterns, inline confirmation UI, and Agent Debug tab full-trace upgrade into one foundational chapter (8-10 hours, the largest single chapter in the curriculum). Narrowed AC-05 scope to specifically multi-turn agentic loops for complex multi-step tasks (3-4 hours) — e.g., "plan my Thursday" triggers a sequence of read→prioritize→draft→confirm→execute. Rationale: these pieces don't meaningfully work in isolation; the student needs the full agentic foundation in one chapter to build the mental model for agentic work before layering multi-turn complexity on top. Positions unchanged; curriculum length unchanged at 47.

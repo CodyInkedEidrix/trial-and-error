@@ -408,6 +408,6 @@ After AC-01:
 - **TC-02 — Web Search** and **TC-03 — Image Analysis** are nice breathers, both ~45 min
 - **Chapter 14 — Supabase Foundation** is next on the main track, sets up real data persistence
 - **AC-02 — Context-Aware Chat** comes after that, making the chat aware of your records
-- **AC-03 — Tool Calling** is the big one — AI that can actually DO things in your app
+- **AC-03 — Agentic Foundation** is the big one — AI that can actually DO things in your app
 
 The runway from here to "agentic Eidrix" is short. Every chapter from this point on is building toward the thing you've been imagining.

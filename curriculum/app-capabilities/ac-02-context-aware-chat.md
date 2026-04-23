@@ -533,7 +533,7 @@ This is **model routing** — deciding per-request which model to use. Trial and
 
 ## Next up
 
-**AC-03 — Tool Calling.** THE chapter. Claude gets permission to CREATE, UPDATE, DELETE customers and jobs via natural language. "Add a customer named John Smith, phone 555-1234" — a new row appears. "Mark Al's proposal as approved" — the status changes. This is where Eidrix becomes agentic, not just aware. About 4-5 hours. The centerpiece of the entire curriculum.
+**AC-03 — Agentic Foundation.** THE chapter. Claude gets permission to CREATE, UPDATE, DELETE customers and jobs via natural language. "Add a customer named John Smith, phone 555-1234" — a new row appears. "Mark Al's proposal as approved" — the status changes. This is where Eidrix becomes agentic, not just aware. About 4-5 hours. The centerpiece of the entire curriculum.
 
 After AC-03:
 - **AC-04 — Agent Memory.** Cross-session persistent memory via hybrid storage (Postgres + vector store). ~3-4 hours.

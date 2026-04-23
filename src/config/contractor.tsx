@@ -10,8 +10,11 @@
 import type { BusinessConfig, RecordsConfig } from './businessConfig'
 import { recordsTab } from './businessConfig'
 import type { Customer } from '../types/customer'
+import type { Job } from '../types/job'
 import { useCustomerStore } from '../lib/customerStore'
 import { useCustomerFormStore } from '../lib/customerFormStore'
+import { useJobStore } from '../lib/jobStore'
+import { useJobFormStore } from '../lib/jobFormStore'
 import { useToastStore } from '../lib/toastStore'
 import { useTabStore } from '../lib/tabStore'
 import { formatRelative } from '../lib/relativeTime'
@@ -19,12 +22,18 @@ import { formatRelative } from '../lib/relativeTime'
 import LabView from '../components/views/LabView'
 import ChatView from '../components/views/ChatView'
 import SettingsView from '../components/views/SettingsView'
+import AgentDebugTab from '../components/views/AgentDebugTab'
 import ComponentsTab from '../components/ComponentsTab'
 import BrandTab from '../components/BrandTab'
 import StatusBadge from '../components/records/StatusBadge'
+import JobStatusBadge from '../components/records/JobStatusBadge'
 import CustomerProfileStrip from '../components/records/CustomerProfileStrip'
+import JobProfileStrip from '../components/records/JobProfileStrip'
 import CustomerOverviewSection from '../components/records/sections/CustomerOverviewSection'
 import CustomerNotesSection from '../components/records/sections/CustomerNotesSection'
+import CustomerJobsSection from '../components/records/sections/CustomerJobsSection'
+import JobOverviewSection from '../components/records/sections/JobOverviewSection'
+import JobRelatedCustomerSection from '../components/records/sections/JobRelatedCustomerSection'
 
 const UNDO_WINDOW_MS = 5000
 
@@ -108,6 +117,11 @@ const customerRecords: RecordsConfig<Customer> = {
       Component: CustomerOverviewSection,
     },
     {
+      id: 'jobs',
+      label: 'Jobs',
+      Component: CustomerJobsSection,
+    },
+    {
       id: 'notes',
       label: 'Notes',
       Component: CustomerNotesSection,
@@ -152,7 +166,145 @@ const customerRecords: RecordsConfig<Customer> = {
   useRecentlyAddedId: () => useCustomerStore((s) => s.recentlyAddedId),
 }
 
+// ─── Job records configuration (AC-02) ────────────────────────────────
+// Mirrors customerRecords. The engine renders this exactly the same way
+// — that's the proof that Chapter 10.5's engine generalized correctly.
+
+function formatAmountUsd(amount: number | undefined): string {
+  if (amount === undefined || amount === null) return '—'
+  return amount.toLocaleString('en-US', {
+    style: 'currency',
+    currency: 'USD',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })
+}
+
+function formatScheduledDate(iso: string | undefined): string {
+  if (!iso) return '—'
+  const d = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(d.getTime())) return iso
+  return d.toLocaleDateString(undefined, {
+    month: 'short',
+    day: 'numeric',
+  })
+}
+
+const jobRecords: RecordsConfig<Job> = {
+  recordType: 'job',
+  singular: 'Job',
+  plural: 'Jobs',
+
+  useRecords: () => useJobStore((s) => s.jobs),
+
+  getId: (j) => j.id,
+  getDisplayName: (j) => j.title,
+
+  columns: [
+    {
+      id: 'title',
+      header: 'Job',
+      widthClass: 'w-[36%]',
+      render: (j) => (
+        <div className="font-body text-sm text-text-primary transition-colors group-hover:text-ember-300 group-focus-visible:text-ember-300">
+          {j.title}
+        </div>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      widthClass: 'w-[16%]',
+      render: (j) => <JobStatusBadge status={j.status} />,
+    },
+    {
+      id: 'customer',
+      header: 'Customer',
+      widthClass: 'w-[24%]',
+      render: (j) => <JobCustomerCell job={j} />,
+    },
+    {
+      id: 'scheduled',
+      header: 'Scheduled',
+      widthClass: 'w-[12%]',
+      render: (j) => (
+        <span className="font-mono text-xs text-text-secondary tabular-nums">
+          {formatScheduledDate(j.scheduledDate)}
+        </span>
+      ),
+    },
+    {
+      id: 'amount',
+      header: 'Amount',
+      widthClass: 'w-[12%]',
+      render: (j) => (
+        <span className="font-mono text-xs text-ember-300 tabular-nums">
+          {formatAmountUsd(j.amount)}
+        </span>
+      ),
+    },
+  ],
+
+  detailSections: [
+    {
+      id: 'overview',
+      label: 'Overview',
+      Component: JobOverviewSection,
+    },
+    {
+      id: 'customer',
+      label: 'Related Customer',
+      Component: JobRelatedCustomerSection,
+    },
+  ],
+
+  ProfileStrip: JobProfileStrip,
+
+  onAddRecord: () => useJobFormStore.getState().openAdd(),
+
+  onDeleteRecord: (j) => {
+    const store = useJobStore.getState()
+    const toast = useToastStore.getState()
+    store.deleteJob(j.id)
+    toast.push({
+      title: `${j.title} deleted`,
+      variant: 'info',
+      duration: UNDO_WINDOW_MS,
+      action: {
+        label: 'Undo',
+        onClick: () => store.undoDelete(j.id),
+      },
+      onDismiss: () => store.finalizeDelete(j.id),
+    })
+  },
+
+  onRowClick: (j) => useTabStore.getState().openRecordTab('jobs', j),
+
+  useRecentlyAddedId: () => useJobStore((s) => s.recentlyAddedId),
+}
+
+// Sub-component used in the job-row "Customer" cell. Lives at module
+// scope (not inline in the column render) so React doesn't recreate it
+// every paint. Looks up the customer name from the store; falls back
+// to a placeholder if the related customer isn't loaded.
+function JobCustomerCell({ job }: { job: Job }) {
+  const customerName = useCustomerStore(
+    (s) => s.customers.find((c) => c.id === job.customerId)?.name,
+  )
+  return (
+    <span className="font-body text-xs text-text-secondary">
+      {customerName ?? '—'}
+    </span>
+  )
+}
+
 // ─── The contractor config ────────────────────────────────────────────
+// VITE_DEV_MODE controls whether the Agent Debug tab is included.
+// Build-time evaluated — change requires a Vite restart (local) or a
+// new deploy (production). Set per Netlify deploy context: 'true' for
+// local + deploy previews, 'false' (or unset) for production.
+
+const isDevMode = import.meta.env.VITE_DEV_MODE === 'true'
 
 export const contractorConfig: BusinessConfig = {
   id: 'contractor',
@@ -172,7 +324,23 @@ export const contractorConfig: BusinessConfig = {
       kind: 'records',
       records: customerRecords,
     }),
+    recordsTab<Job>({
+      id: 'jobs',
+      label: 'Jobs',
+      kind: 'records',
+      records: jobRecords,
+    }),
     { id: 'chat', label: 'Chat', kind: 'custom', Component: ChatView },
     { id: 'settings', label: 'Settings', kind: 'custom', Component: SettingsView },
+    ...(isDevMode
+      ? [
+          {
+            id: 'agent-debug',
+            label: 'Agent Debug',
+            kind: 'custom' as const,
+            Component: AgentDebugTab,
+          },
+        ]
+      : []),
   ],
 }

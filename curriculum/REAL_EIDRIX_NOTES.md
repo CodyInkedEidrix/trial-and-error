@@ -25,15 +25,17 @@ Structure:
 ## Model Strategy
 
 **Locked decisions:**
-- Production Eidrix runs **Claude Opus 4.7** by default for user-facing work
-- Development/testing uses **Haiku 4.5** for cost, **Sonnet 4.6** for tool-calling iteration
-- Model selection is per-task where it matters (quick responses → Sonnet; heavy reasoning → Opus)
-- API key management uses the server-side pattern from Chapter 13 (never in the browser)
+- **Sonnet 4.6 is the production default** for context-aware chat (AC-02 onward). Pricing/quality balance hits the right spot for operator-style queries against relational data. Opus 4.7 is the upgrade path when complex reasoning is needed.
+- **Three-tier model offering** in agent_settings: Haiku 4.5 ($1/$5 per 1M), Sonnet 4.6 ($3/$15), Opus 4.7 ($5/$25). Real Eidrix may default users to Sonnet without exposing the choice; Trial and Error exposes all three for learning-mode testing.
+- **Anthropic naming convention shift (Apr 2026)** — for Opus 4.7 and Sonnet 4.6, the alias and pinned ID are the same string (`claude-opus-4-7`, `claude-sonnet-4-6`). Only Haiku 4.5 retains the date-suffix convention (`claude-haiku-4-5-20251001`). Both forms are equally stable per Anthropic's docs. New models added via `alter type ... add value` (one-line migration).
+- **Cost visibility is non-negotiable.** The Debug tab's per-request cost + cumulative session cost trains intuitive discipline ("don't leave Opus on for testing"). Real Eidrix preserves this in an admin/owner-facing surface.
+- **API key management uses the server-side pattern from Chapter 13** (never in the browser).
 
 **Open questions:**
 - BYOK (bring your own key) for customers vs. Eidrix-managed keys with markup pricing? Affects unit economics.
 - Model fallback strategy when Opus is rate-limited or down
 - How much of the chat UI should make model choice visible to the user vs. invisible
+- **Per-request model routing** — should Eidrix auto-pick Haiku for simple lookups, Sonnet for general queries, Opus for "thinking" prompts? AC-02 sets the model at session level via Settings; production may want per-message routing based on query classification. Pre-build audit decision.
 
 ---
 
@@ -51,6 +53,8 @@ Structure:
 - **All Postgres functions lock their `search_path`** even if not `SECURITY DEFINER`. Defense-in-depth against schema-shadowing attacks. Empty (`set search_path = ''`) is fine for functions that only use built-ins; otherwise `set search_path = public`.
 - **All RLS policies wrap `auth.uid()` calls in `(SELECT auth.uid())` subqueries.** Postgres hoists these as InitPlans (one evaluation per query) instead of evaluating per row. Critical at scale.
 - **Hardening migrations are append-only.** Never edit a migration that's been applied. Add a new "harden_*" migration that fixes the issue. Keeps schema history reproducible.
+- **Relational entities follow the same shape — both schema-side and store-side.** Jobs (AC-02) is a near-identical structural copy of Customers (Ch 14): same `is_member_of(organization_id)` RLS pattern, same snake/camel mapping at the store boundary, same async/optimistic CRUD shape with rollback, same module-level subscription to authStore for auto-load. The repeatability is the proof — real Eidrix's Customer → Job → Invoice → LineItem chain is N copies of the same template, not N hand-built integrations.
+- **The engine is genuinely entity-agnostic.** AC-02 added Jobs as a primary tab and Agent Debug as a primary tab via `BusinessConfig.primaryTabs[]` — zero edits to TabsPanel, RecordListView, RecordDetailView, or any engine file. Validates Chapter 10.5's architecture at scale; real Eidrix gets the engine portable as-is.
 
 **Open questions:**
 - Separate Supabase project per environment (dev/staging/prod) — **provisional answer: yes**, one cloud project per environment. Trial and Error currently uses one cloud project; real Eidrix gets cleanly separated. Cheap at the current tier, clean isolation, no schema-cross-contamination risk. Confirm at the pre-build audit.
@@ -129,15 +133,23 @@ Structure:
 
 **Locked decisions:**
 - **Streaming responses always** — never wait-then-dump
-- **System prompt establishes Eidrix voice** — dry, direct, trustworthy, never cheerful-AI
+- **System prompt establishes Eidrix voice** — dry, direct, trustworthy, never cheerful-AI by default; per-tenant customization makes humor/personality opt-in
 - **Server-side API calls only** — key never in browser, Netlify/Vercel Functions mediate
-- **Per-tenant customizable system prompts** — merch seller's Eidrix, plumber's Eidrix, contractor's Eidrix all speak appropriately for their context
-- **Chat is aware of user's current context** — open record tab, active filter, current view (AC-02 territory)
+- **Per-tenant customizable system prompts** stored in `agent_settings` table, not hardcoded — merch seller's Eidrix, plumber's Eidrix, contractor's Eidrix all configurable
+- **Three context modes** (`off` / `subset` / `full`) controlled per-org. Smart Subset is the production default — it captures recent customers + customers with open jobs + their open jobs, plus org-wide totals. Enough signal for most operator queries; cheap on tokens.
+- **Structured-data injection format**, never prose. Pipe-separated fields, dashes for absent values, headers with em-dash counts (`CUSTOMERS — 12 of 47 shown`), totals at the bottom. Claude reasons dramatically better on this format than on prose descriptions of the same data.
+- **JWT pass-through (not service role)** for server-side data fetches. The function creates a per-request Supabase client with the user's JWT so RLS enforces tenant isolation at the database layer. Defense in depth — any code-level bug becomes "zero rows returned" instead of a cross-tenant data leak.
+- **Lazy-upsert defaults** mirrored on both client (Settings UI) and server (chat function). Either path can hit first; both converge on the same defaults defined as constants in their respective files. When real Eidrix moves defaults to a config table or per-tenant template, the convergence guarantee survives.
+- **Conversation history is the in-session "memory"** — no separate memory layer at this stage. Context-mode toggles affect ONLY the injected business-data block; previous assistant responses in the messages array still convey domain knowledge from earlier turns. Persistent cross-session memory is AC-04.
+- **Observability is a first-class feature, not a debug afterthought.** The Agent Debug tab (dev-only via `VITE_DEV_MODE`) shows the full system prompt sent, the messages array, the response, token counts, response time, and per-request cost. Real Eidrix preserves this pattern as an internal/admin surface — exposed to support staff, not end users.
+- **Cumulative session cost** displayed in the Debug tab. Visceral cost feedback during testing trains the discipline of not leaving Opus on for casual chat.
 
 **Open questions:**
 - Chat scope: one global conversation, one per record, or one per "session" where user can name them?
 - How does Eidrix know when NOT to answer — when is "I'll route this to a human" or "I don't know, here's what I'd look at"?
-- Voice and tone customization per tenant — how much to expose to the business owner?
+- Voice and tone customization per tenant — how much to expose to the business owner? (Trial and Error exposes everything — production may want to gate certain settings to org-owners only.)
+- Smart Subset selection logic — Trial and Error uses recency (last 30 days) + open status. Real Eidrix at scale may need per-tenant tuning of these heuristics, or a smarter subset (e.g., LLM-driven "what data is relevant to this user query?") rather than fixed rules.
+- "Clear conversation" UX — currently only happens via page refresh. Worth a small button in the chat column eventually (out of scope for AC-02).
 
 ---
 
@@ -276,3 +288,4 @@ The signature onboarding flow for real Eidrix. Deserves its own section because 
 - **April 22, 2026** — Document created after AC-01 as the persistent architectural memory for real Eidrix.
 - **April 22, 2026** — Added Hard-Won Lessons section after Chapter 14 build session surfaced five footguns: supabase-js auth callback deadlock, StrictMode-killed subscriptions, Windows Hyper-V port reservations, Kong stale upstream IPs, Vite-doesn't-serve-functions. Each cost real time to diagnose.
 - **April 22, 2026** — Chapter 14 (Supabase Foundation) shipped. Multi-tenant schema, RLS, email+password auth all rehearsed in Trial and Error. Major Data Architecture and Auth section updates: locked the `is_member_of` helper-function pattern, snake/camel mapping at the store boundary, generated-types-committed-to-repo, append-only hardening migrations, sync onAuthStateChange callbacks, module-level auth subscription, defensive timeouts, fire-and-forget sign-out. Switched from magic link to email+password as primary auth. Resolved (provisionally): one Supabase project per environment.
+- **April 23, 2026** — AC-02 (Context-Aware Chat) shipped. Jobs entity added (relational to Customers, mirrors the customers store/RLS pattern exactly — first proof point that the entity template repeats cleanly). `agent_settings` table per org holds system_prompt + context_mode + model. Chat function reads settings at request time via JWT-pass-through, fetches business data RLS-scoped, injects as STRUCTURED text (pipes/dashes/totals — not prose). Three context modes: off / smart subset / full. Agent Debug tab provides per-request observability with token counts, response time, and cumulative session cost — gated by `VITE_DEV_MODE` build-time flag. Sonnet 4.6 is now the production default; Haiku 4.5 and Opus 4.7 also available. Anthropic naming convention shift noted (alias = pinned ID for 4.6/4.7 generation).

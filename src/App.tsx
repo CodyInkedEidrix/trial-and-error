@@ -3,6 +3,7 @@ import ChatColumn from './components/ChatColumn'
 import TabsPanel from './components/TabsPanel'
 import CommandPalette from './components/CommandPalette'
 import CustomerForm from './components/records/CustomerForm'
+import JobForm from './components/records/JobForm'
 import ToastStack from './components/toast/ToastStack'
 import SignInPage from './components/auth/SignInPage'
 import { useAuth } from './lib/useAuth'
@@ -60,6 +61,7 @@ export default function App() {
       </div>
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <CustomerForm />
+      <JobForm />
       <ToastStack />
     </>
   )

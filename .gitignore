@@ -24,6 +24,14 @@ yarn-debug.log*
 yarn-error.log*
 *.log
 
+# Netlify CLI runtime artifacts — local function-serving state.
+# Created by `netlify dev`; not part of the project.
+.netlify
+
+# Deno lockfile created by Netlify's Edge Functions bundler during
+# `netlify dev`. We don't ship Edge Functions; this is transient.
+deno.lock
+
 # Claude Code session state — per-machine, not part of the project.
 # Exception: .claude/skills/ holds vendored skills that ARE part of the
 # project and need to be tracked.

@@ -11,10 +11,13 @@ import type { BusinessConfig, RecordsConfig } from './businessConfig'
 import { recordsTab } from './businessConfig'
 import type { Customer } from '../types/customer'
 import type { Job } from '../types/job'
+import type { Proposal } from '../types/proposal'
 import { useCustomerStore } from '../lib/customerStore'
 import { useCustomerFormStore } from '../lib/customerFormStore'
 import { useJobStore } from '../lib/jobStore'
 import { useJobFormStore } from '../lib/jobFormStore'
+import { useProposalStore } from '../lib/proposalStore'
+import { useProposalFormStore } from '../lib/proposalFormStore'
 import { useToastStore } from '../lib/toastStore'
 import { useTabStore } from '../lib/tabStore'
 import { formatRelative } from '../lib/relativeTime'
@@ -27,13 +30,20 @@ import ComponentsTab from '../components/ComponentsTab'
 import BrandTab from '../components/BrandTab'
 import StatusBadge from '../components/records/StatusBadge'
 import JobStatusBadge from '../components/records/JobStatusBadge'
+import ProposalStatusBadge from '../components/records/ProposalStatusBadge'
 import CustomerProfileStrip from '../components/records/CustomerProfileStrip'
 import JobProfileStrip from '../components/records/JobProfileStrip'
+import ProposalProfileStrip from '../components/records/ProposalProfileStrip'
 import CustomerOverviewSection from '../components/records/sections/CustomerOverviewSection'
 import CustomerNotesSection from '../components/records/sections/CustomerNotesSection'
 import CustomerJobsSection from '../components/records/sections/CustomerJobsSection'
+import CustomerProposalsSection from '../components/records/sections/CustomerProposalsSection'
 import JobOverviewSection from '../components/records/sections/JobOverviewSection'
 import JobRelatedCustomerSection from '../components/records/sections/JobRelatedCustomerSection'
+import JobProposalsSection from '../components/records/sections/JobProposalsSection'
+import ProposalOverviewSection from '../components/records/sections/ProposalOverviewSection'
+import ProposalRelatedCustomerSection from '../components/records/sections/ProposalRelatedCustomerSection'
+import ProposalRelatedJobSection from '../components/records/sections/ProposalRelatedJobSection'
 
 const UNDO_WINDOW_MS = 5000
 
@@ -120,6 +130,11 @@ const customerRecords: RecordsConfig<Customer> = {
       id: 'jobs',
       label: 'Jobs',
       Component: CustomerJobsSection,
+    },
+    {
+      id: 'proposals',
+      label: 'Proposals',
+      Component: CustomerProposalsSection,
     },
     {
       id: 'notes',
@@ -256,6 +271,11 @@ const jobRecords: RecordsConfig<Job> = {
       label: 'Related Customer',
       Component: JobRelatedCustomerSection,
     },
+    {
+      id: 'proposals',
+      label: 'Proposals',
+      Component: JobProposalsSection,
+    },
   ],
 
   ProfileStrip: JobProfileStrip,
@@ -298,6 +318,109 @@ function JobCustomerCell({ job }: { job: Job }) {
   )
 }
 
+// ─── Proposal records configuration (AC-03) ──────────────────────────
+// Third copy of the same template. Proposals are the first entity with
+// an OPTIONAL relation (job_id nullable) — otherwise identical shape.
+
+const proposalRecords: RecordsConfig<Proposal> = {
+  recordType: 'proposal',
+  singular: 'Proposal',
+  plural: 'Proposals',
+
+  useRecords: () => useProposalStore((s) => s.proposals),
+
+  getId: (p) => p.id,
+  getDisplayName: (p) => p.title,
+
+  columns: [
+    {
+      id: 'title',
+      header: 'Proposal',
+      widthClass: 'w-[36%]',
+      render: (p) => (
+        <div className="font-body text-sm text-text-primary transition-colors group-hover:text-ember-300 group-focus-visible:text-ember-300">
+          {p.title}
+        </div>
+      ),
+    },
+    {
+      id: 'status',
+      header: 'Status',
+      widthClass: 'w-[14%]',
+      render: (p) => <ProposalStatusBadge status={p.status} />,
+    },
+    {
+      id: 'customer',
+      header: 'Customer',
+      widthClass: 'w-[26%]',
+      render: (p) => <ProposalCustomerCell proposal={p} />,
+    },
+    {
+      id: 'amount',
+      header: 'Amount',
+      widthClass: 'w-[12%]',
+      render: (p) => (
+        <span className="font-mono text-xs text-ember-300 tabular-nums">
+          {formatAmountUsd(p.amount)}
+        </span>
+      ),
+    },
+  ],
+
+  detailSections: [
+    {
+      id: 'overview',
+      label: 'Overview',
+      Component: ProposalOverviewSection,
+    },
+    {
+      id: 'customer',
+      label: 'Related Customer',
+      Component: ProposalRelatedCustomerSection,
+    },
+    {
+      id: 'job',
+      label: 'Related Job',
+      Component: ProposalRelatedJobSection,
+    },
+  ],
+
+  ProfileStrip: ProposalProfileStrip,
+
+  onAddRecord: () => useProposalFormStore.getState().openAdd(),
+
+  onDeleteRecord: (p) => {
+    const store = useProposalStore.getState()
+    const toast = useToastStore.getState()
+    store.deleteProposal(p.id)
+    toast.push({
+      title: `${p.title} deleted`,
+      variant: 'info',
+      duration: UNDO_WINDOW_MS,
+      action: {
+        label: 'Undo',
+        onClick: () => store.undoDelete(p.id),
+      },
+      onDismiss: () => store.finalizeDelete(p.id),
+    })
+  },
+
+  onRowClick: (p) => useTabStore.getState().openRecordTab('proposals', p),
+
+  useRecentlyAddedId: () => useProposalStore((s) => s.recentlyAddedId),
+}
+
+function ProposalCustomerCell({ proposal }: { proposal: Proposal }) {
+  const customerName = useCustomerStore(
+    (s) => s.customers.find((c) => c.id === proposal.customerId)?.name,
+  )
+  return (
+    <span className="font-body text-xs text-text-secondary">
+      {customerName ?? '—'}
+    </span>
+  )
+}
+
 // ─── The contractor config ────────────────────────────────────────────
 // VITE_DEV_MODE controls whether the Agent Debug tab is included.
 // Build-time evaluated — change requires a Vite restart (local) or a
@@ -329,6 +452,12 @@ export const contractorConfig: BusinessConfig = {
       label: 'Jobs',
       kind: 'records',
       records: jobRecords,
+    }),
+    recordsTab<Proposal>({
+      id: 'proposals',
+      label: 'Proposals',
+      kind: 'records',
+      records: proposalRecords,
     }),
     { id: 'chat', label: 'Chat', kind: 'custom', Component: ChatView },
     { id: 'settings', label: 'Settings', kind: 'custom', Component: SettingsView },

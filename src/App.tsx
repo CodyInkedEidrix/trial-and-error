@@ -4,6 +4,7 @@ import TabsPanel from './components/TabsPanel'
 import CommandPalette from './components/CommandPalette'
 import CustomerForm from './components/records/CustomerForm'
 import JobForm from './components/records/JobForm'
+import ProposalForm from './components/records/ProposalForm'
 import ToastStack from './components/toast/ToastStack'
 import SignInPage from './components/auth/SignInPage'
 import { useAuth } from './lib/useAuth'
@@ -62,6 +63,7 @@ export default function App() {
       <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} />
       <CustomerForm />
       <JobForm />
+      <ProposalForm />
       <ToastStack />
     </>
   )

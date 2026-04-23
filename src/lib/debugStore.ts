@@ -82,6 +82,27 @@ export interface DebugEntry {
 
   /** Set if the request errored. Body of the response is empty in this case. */
   errorMessage: string | null
+
+  // ─── AC-03 additions — tool calling trace ────────────────────────
+  /** Full log of tool calls made during this request. Empty when the
+   *  agent responded with plain text. Session 1 captures raw JSON
+   *  input/result; Session 2 renders this as a readable trace. */
+  toolCalls: ToolCallEntry[]
+
+  /** Number of Anthropic round trips for this request (1 = no tools). */
+  iterations: number
+
+  /** True when the loop exited because it hit MAX_ITERATIONS rather
+   *  than Claude deciding to stop. Signals the reply may be partial. */
+  hitIterationCap: boolean
+}
+
+export interface ToolCallEntry {
+  name: string
+  input: unknown
+  result: unknown
+  durationMs: number
+  iteration: number
 }
 
 interface DebugStore {

@@ -18,6 +18,7 @@
 import { create } from 'zustand'
 
 import { MODEL_META, type AgentModel } from '../types/agentSettings'
+import type { UiContext } from './../types/uiContext'
 
 const MAX_ENTRIES = 10
 
@@ -95,6 +96,17 @@ export interface DebugEntry {
   /** True when the loop exited because it hit MAX_ITERATIONS rather
    *  than Claude deciding to stop. Signals the reply may be partial. */
   hitIterationCap: boolean
+
+  /** Snapshot of UI state at send time — what tab/record/section the
+   *  user was viewing. Injected into the system prompt. null when the
+   *  client didn't send one (should be rare post-AC-03 Session 2). */
+  uiContext: UiContext | null
+
+  /** Which entity stores were refetched after this turn. Empty means
+   *  the turn was read-only. Useful for "why did my list refresh?"
+   *  debugging and for verifying the targeted-refresh is actually
+   *  targeted. */
+  affectedEntities: string[]
 }
 
 export interface ToolCallEntry {

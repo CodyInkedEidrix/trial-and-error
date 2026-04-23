@@ -40,7 +40,13 @@ import type { Context } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 
 import type { Database } from '../../src/types/database.types'
-import { TOOL_REGISTRY, TOOL_SCHEMAS } from './_lib/tools'
+import {
+  formatUiContextPrompt,
+  parseUiContext,
+  type UiContext,
+} from '../../src/types/uiContext'
+import { TOOL_AFFECTS, TOOL_REGISTRY, TOOL_SCHEMAS } from './_lib/tools'
+import type { EntityType } from './_lib/tools'
 import type { ToolContext, ToolResult } from './_lib/tools'
 
 // ─── CORS ────────────────────────────────────────────────────────────
@@ -59,6 +65,18 @@ const MAX_TOKENS = 2048
  *  flows complete in 1-3 iterations. Hitting this cap emits a graceful
  *  "stopped at N steps" synthetic response. */
 const MAX_ITERATIONS = 10
+
+/** Ceiling on how many destructive tool COMMITS can happen in a single
+ *  chat request. Session 2 hardening — belt-and-suspenders on top of
+ *  the iteration cap and the per-call confirmation token. If a confused
+ *  agent somehow gets past both, this stops it at 3. Phase-1 previews
+ *  don't count (they don't mutate). */
+const MAX_DESTRUCTIVE_COMMITS = 3
+const DESTRUCTIVE_TOOLS = new Set<string>([
+  'deleteCustomer',
+  'deleteJob',
+  'deleteProposal',
+])
 
 // Subset selection: customer is "in subset" if updated within this
 // many days OR has any job in an open status.
@@ -81,6 +99,12 @@ You have tools to create, update, delete, and find customers, jobs, and proposal
 
 If the user refers to someone by partial name and you don't already have that customer in context, use searchCustomers first to resolve the id before acting. If multiple customers match, ask which they meant with specific detail ("Which Joe — Joe Smith with 3 open jobs, or Joe Martinez?").
 
+DESTRUCTIVE OPERATIONS (deleteCustomer, deleteJob, deleteProposal) ARE TWO-PHASE. Phase 1: call the tool with just the target id and NO confirmation_token. The executor returns a preview with { requires_confirmation: true, summary, confirmation_token }. You then explain the summary to the user in plain language and wait for them to confirm. Phase 2: after the user confirms ("yes", "confirm", "go ahead", clicking the Confirm button), call the same tool AGAIN with the same id AND the confirmation_token from the preview. That's when it actually happens. Never skip phase 1. The phrase "delete X" on its own is a REQUEST, not a CONFIRMATION.
+
+If UI context identifies which record the user is viewing (see CURRENT UI CONTEXT below, when present), use it to resolve references like "this customer", "him/her", "that proposal". Explicit mentions of other names always override UI context.
+
+For broad or vague requests ("clean up my leads", "archive old stuff") ask what they mean before acting.
+
 Be direct. Be specific. When the data shows a thing, name it. When you don't know, say so plainly — never invent.
 
 Skip performative enthusiasm. Skip "Great question!" Skip exclamation points. They're a contractor or shop owner, not an audience.`
@@ -97,6 +121,9 @@ interface IncomingMessage {
 
 interface RequestBody {
   messages: IncomingMessage[]
+  /** Snapshot of where the user was looking when they hit send. Used
+   *  to resolve references like "this customer" without a tool call. */
+  uiContext?: unknown
 }
 
 type ContextMode = 'off' | 'subset' | 'full'
@@ -529,6 +556,39 @@ async function executeToolCall(
   }
 }
 
+/** True when a tool call carries a non-empty `confirmation_token` — the
+ *  signal that it's a phase-2 commit rather than a phase-1 preview. */
+function hasConfirmationToken(input: unknown): boolean {
+  if (!input || typeof input !== 'object') return false
+  const t = (input as { confirmation_token?: unknown }).confirmation_token
+  return typeof t === 'string' && t.length > 0
+}
+
+/** True when a tool's success result indicates it previewed rather
+ *  than committed — the sentinel is `data.requires_confirmation`. See
+ *  netlify/functions/_lib/confirmationToken.ts for the why. */
+function isPendingConfirmation(result: ToolResult): boolean {
+  if (!result.success) return false
+  const data = result.data as { requires_confirmation?: unknown } | null
+  return Boolean(data && data.requires_confirmation === true)
+}
+
+/** Extract the confirmation preview payload from a tool result and
+ *  shape it as an SSE event for the client. The client uses this to
+ *  render inline Confirm / Cancel buttons on the streaming message. */
+function pendingActionEvent(result: ToolResult): Record<string, unknown> {
+  const data = result.success
+    ? (result.data as Record<string, unknown>)
+    : {}
+  return {
+    type: 'eidrix_pending_action',
+    action: data.action ?? 'unknown',
+    params: data.params ?? {},
+    summary: data.summary ?? '',
+    confirmationToken: data.confirmation_token ?? '',
+  }
+}
+
 // ─── Main handler ────────────────────────────────────────────────────
 
 export default async (req: Request, _context: Context) => {
@@ -617,9 +677,24 @@ export default async (req: Request, _context: Context) => {
   const settings = await loadAgentSettings(supabaseForUser, orgId)
   const context = await buildContextPayload(supabaseForUser, settings.context_mode)
 
-  const finalSystemPrompt = context.injectedText
-    ? `${settings.system_prompt}\n\n${context.injectedText}`
-    : settings.system_prompt
+  // UI context is tiny and always useful for "this" / "him" resolution.
+  // Not gated by context_mode — even when data injection is 'off', the
+  // UI context still helps the agent interpret references.
+  const uiContextParsed: UiContext | null = parseUiContext(body.uiContext)
+  const uiContextBlock = uiContextParsed
+    ? formatUiContextPrompt(uiContextParsed)
+    : ''
+
+  // Assemble: base prompt → UI context → business data. Order matters:
+  // UI context sits between the voice/instructions and the raw data,
+  // so references in the data block ("Al Schindler") read against the
+  // context immediately above.
+  const promptParts = [
+    settings.system_prompt,
+    uiContextBlock,
+    context.injectedText,
+  ].filter((s) => s && s.length > 0)
+  const finalSystemPrompt = promptParts.join('\n\n')
 
   const requestStartedAt = Date.now()
   const anthropic = new Anthropic({ apiKey: anthropicKey })
@@ -641,6 +716,15 @@ export default async (req: Request, _context: Context) => {
   const stream = new ReadableStream({
     async start(controller) {
       const toolCallLog: ToolCallLogEntry[] = []
+      /** Set of client-side stores that need to refetch after this turn.
+       *  Built from TOOL_AFFECTS as tools execute; only successful
+       *  write tools count (failed writes leave DB state unchanged, so
+       *  no refetch needed). */
+      const affectedEntities = new Set<EntityType>()
+      /** Running count of destructive commits (phase-2 delete calls)
+       *  this request. Phase-1 previews don't count since they don't
+       *  mutate. */
+      let destructiveCommitCount = 0
       let totalInputTokens = 0
       let totalOutputTokens = 0
       let totalCacheReadInputTokens = 0
@@ -790,26 +874,128 @@ export default async (req: Request, _context: Context) => {
               (b): b is Anthropic.ToolUseBlock => b.type === 'tool_use',
             )
 
-            // Execute in parallel. Promise.all preserves order, so we
-            // can zip results back against the blocks by index.
-            const results = await Promise.all(
-              toolUseBlocks.map(async (block) => {
-                const started = Date.now()
-                const result = await executeToolCall(
-                  block.name,
-                  block.input,
-                  toolCtx,
-                )
-                const durationMs = Date.now() - started
-                toolCallLog.push({
-                  name: block.name,
-                  input: block.input,
-                  result,
-                  durationMs,
-                  iteration,
-                })
-                return { block, result }
-              }),
+            // Partition blocks into destructive commits vs everything
+            // else. Destructive commits MUST run sequentially so the
+            // MAX_DESTRUCTIVE_COMMITS counter is check-and-increment
+            // under a single thread of execution — Promise.all would
+            // race multiple commits past a counter of zero.
+            //
+            // Reads + writes + destructive previews go parallel
+            // (independent, no race concerns). Destructive commits
+            // (phase-2 delete with token) go serial after the parallel
+            // batch resolves.
+
+            const runBlock = async (
+              block: Anthropic.ToolUseBlock,
+            ): Promise<{ block: Anthropic.ToolUseBlock; result: ToolResult }> => {
+              const started = Date.now()
+
+              const isDestructiveCommit =
+                DESTRUCTIVE_TOOLS.has(block.name) &&
+                hasConfirmationToken(block.input)
+
+              // Check-and-increment BEFORE executing so a concurrent
+              // sibling on a parallel path can't also pass the check.
+              // (For this serial loop this is belt-and-suspenders, but
+              // it keeps the invariant tight.)
+              if (isDestructiveCommit) {
+                if (destructiveCommitCount >= MAX_DESTRUCTIVE_COMMITS) {
+                  const result: ToolResult = {
+                    success: false,
+                    error: `Destructive-action rate cap reached (${MAX_DESTRUCTIVE_COMMITS} per request). If the user really needs more, they can issue a new chat turn.`,
+                    code: 'forbidden',
+                  }
+                  toolCallLog.push({
+                    name: block.name,
+                    input: block.input,
+                    result,
+                    durationMs: Date.now() - started,
+                    iteration,
+                  })
+                  return { block, result }
+                }
+                destructiveCommitCount++
+              }
+
+              const result = await executeToolCall(
+                block.name,
+                block.input,
+                toolCtx,
+              )
+              const durationMs = Date.now() - started
+
+              // Roll back the pre-increment if the commit didn't
+              // actually mutate (failed / rejected token / unexpected
+              // preview). Keeps the counter aligned with DB reality.
+              if (
+                isDestructiveCommit &&
+                (!result.success || isPendingConfirmation(result))
+              ) {
+                destructiveCommitCount--
+              }
+
+              toolCallLog.push({
+                name: block.name,
+                input: block.input,
+                result,
+                durationMs,
+                iteration,
+              })
+
+              // Mark the affected store IF the tool succeeded AND
+              // maps to a write AND wasn't just a preview (phase 1
+              // of a destructive two-phase). Failed writes and
+              // previews don't mutate the DB — no refetch needed.
+              if (result.success && !isPendingConfirmation(result)) {
+                const affected = TOOL_AFFECTS[block.name]
+                if (affected) affectedEntities.add(affected)
+              }
+
+              // Pending confirmation: notify the client so the UI
+              // can render the inline Confirm / Cancel card alongside
+              // Claude's explanation.
+              if (result.success && isPendingConfirmation(result)) {
+                enqueue(pendingActionEvent(result))
+              }
+
+              return { block, result }
+            }
+
+            // Partition: destructive commits go serial (rate-cap is
+            // check-and-increment — parallel would race past it).
+            // Everything else (reads, writes, destructive PREVIEWS)
+            // runs in parallel for latency.
+            const destructiveCommits = toolUseBlocks.filter(
+              (b) =>
+                DESTRUCTIVE_TOOLS.has(b.name) &&
+                hasConfirmationToken(b.input),
+            )
+            const parallelBlocks = toolUseBlocks.filter(
+              (b) =>
+                !(
+                  DESTRUCTIVE_TOOLS.has(b.name) &&
+                  hasConfirmationToken(b.input)
+                ),
+            )
+
+            const parallelResults = await Promise.all(
+              parallelBlocks.map(runBlock),
+            )
+            const serialResults: typeof parallelResults = []
+            for (const b of destructiveCommits) {
+              serialResults.push(await runBlock(b))
+            }
+
+            // Reassemble in original order so tool_result blocks line
+            // up neatly with Claude's original tool_use sequence.
+            const resultsById = new Map<
+              string,
+              { block: Anthropic.ToolUseBlock; result: ToolResult }
+            >()
+            for (const r of parallelResults) resultsById.set(r.block.id, r)
+            for (const r of serialResults) resultsById.set(r.block.id, r)
+            const results = toolUseBlocks.map(
+              (b) => resultsById.get(b.id)!,
             )
 
             // Append the assistant turn (full content including text
@@ -879,6 +1065,8 @@ export default async (req: Request, _context: Context) => {
           toolCalls: toolCallLog,
           iterations: iterationsRun,
           hitIterationCap,
+          uiContext: uiContextParsed,
+          affectedEntities: [...affectedEntities],
         }
         enqueue(usageEvent)
         controller.close()

@@ -23,6 +23,32 @@ export type MessageRole = 'user' | 'assistant'
  */
 export type MessageStatus = 'complete' | 'streaming' | 'error'
 
+/** A destructive action that's been previewed by the server and is
+ *  awaiting user confirmation. Attached to the assistant message that
+ *  previewed it; the message renders a Confirm / Cancel card inline.
+ *
+ *  When resolved, `resolution` flips — the card shows a muted
+ *  "Confirmed" / "Cancelled" state so the chat history remains readable
+ *  as audit trail. */
+export interface PendingAction {
+  action: string // 'deleteCustomer' / 'deleteJob' / 'deleteProposal'
+  params: Record<string, unknown>
+  summary: string
+  confirmationToken: string
+  /** Resolved state — set when user clicks a button or the confirm
+   *  round-trip otherwise completes. */
+  resolution?: 'confirmed' | 'cancelled'
+}
+
+/** One tool call that failed during an assistant turn. Attached to the
+ *  Message so the UI can show a "⚠ N tool errors" badge even when
+ *  Claude's text response paraphrases over or omits them. */
+export interface ToolErrorSummary {
+  tool: string
+  code?: string
+  message: string
+}
+
 export interface Message {
   id: string
   role: MessageRole
@@ -31,4 +57,12 @@ export interface Message {
   createdAt: string
   /** Omitted = 'complete'. Set explicitly for streaming / error states. */
   status?: MessageStatus
+  /** Present when the server sent an `eidrix_pending_action` event for
+   *  this assistant turn. Rendered inline by the chat UI as a
+   *  Confirm / Cancel card. */
+  pendingAction?: PendingAction
+  /** Tool calls that failed during this assistant turn. Rendered as a
+   *  small warning badge on the message — gives the user visibility
+   *  into tool-layer errors that Claude's text might paraphrase over. */
+  toolErrors?: ToolErrorSummary[]
 }

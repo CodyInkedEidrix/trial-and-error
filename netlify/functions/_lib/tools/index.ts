@@ -42,3 +42,46 @@ export const TOOL_REGISTRY: Record<string, ToolExecutor> = {
   // General
   summarizeForCustomer: general.summarizeForCustomer,
 }
+
+// ─── Affected-entity map ─────────────────────────────────────────────
+// Which client-side store each tool mutates. Read-only tools (search*,
+// find*, summarize*) are `null` — they don't need the client to
+// refetch anything. Used by chat.ts to compile an `affectedEntities`
+// list in the eidrix_usage event; the client refetches only those
+// stores instead of blindly reloading all three.
+//
+// If you add a tool: update this map. Lint would catch it if we had a
+// stricter TS config; today it's a manual discipline checked by eye.
+
+export type EntityType = 'customers' | 'jobs' | 'proposals'
+
+export const TOOL_AFFECTS: Record<string, EntityType | null> = {
+  // Customers — writes
+  addCustomer: 'customers',
+  updateCustomer: 'customers',
+  deleteCustomer: 'customers',
+  // Customers — reads
+  searchCustomers: null,
+  findCustomersByStatus: null,
+
+  // Jobs — writes
+  addJob: 'jobs',
+  updateJob: 'jobs',
+  deleteJob: 'jobs',
+  markJobStatus: 'jobs',
+  // Jobs — reads
+  findJobsForCustomer: null,
+  findJobsByStatus: null,
+
+  // Proposals — writes
+  addProposal: 'proposals',
+  updateProposal: 'proposals',
+  deleteProposal: 'proposals',
+  markProposalStatus: 'proposals',
+  // Proposals — reads
+  findProposalsForCustomer: null,
+  findProposalsForJob: null,
+
+  // General — read-only
+  summarizeForCustomer: null,
+}

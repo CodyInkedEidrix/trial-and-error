@@ -16,7 +16,7 @@
 
 import { useState } from 'react'
 
-import { useDebugStore, type DebugEntry } from '../../lib/debugStore'
+import { useDebugStore, type DebugEntry, type ToolCallEntry } from '../../lib/debugStore'
 import { MODEL_META, type ContextMode } from '../../types/agentSettings'
 
 /** Pill colors for the context-mode badge. Off is muted, subset is
@@ -200,6 +200,61 @@ function DebugEntryRow({ entry }: { entry: DebugEntry }) {
             </pre>
           </DetailSection>
 
+          {/* UI context (AC-03 S2) — what the agent saw about where the
+              user was looking when the question was asked. Absent on
+              older entries from before S2; rendered only when present. */}
+          {entry.uiContext && (
+            <DetailSection title="UI context">
+              <div className="grid grid-cols-[120px_1fr] gap-y-1.5 font-mono text-xs">
+                <span className="text-text-tertiary">Primary tab</span>
+                <span className="text-text-secondary">
+                  {entry.uiContext.primaryTab.label}
+                </span>
+                {entry.uiContext.activeRecord && (
+                  <>
+                    <span className="text-text-tertiary">Active record</span>
+                    <span className="text-text-secondary">
+                      {entry.uiContext.activeRecord.displayName}{' '}
+                      <span className="text-text-tertiary">
+                        ({entry.uiContext.activeRecord.kind} ·{' '}
+                        {entry.uiContext.activeRecord.id})
+                      </span>
+                    </span>
+                  </>
+                )}
+                {entry.uiContext.activeSection && (
+                  <>
+                    <span className="text-text-tertiary">Active section</span>
+                    <span className="text-text-secondary">
+                      {entry.uiContext.activeSection.label}
+                    </span>
+                  </>
+                )}
+              </div>
+            </DetailSection>
+          )}
+
+          {/* Tool trace (AC-03 S2) — the full loop of tool calls made
+              during this request, with timings and results. Only
+              rendered when tool calls happened. */}
+          {entry.toolCalls.length > 0 && (
+            <DetailSection
+              title={`Tool trace (${entry.toolCalls.length} call${entry.toolCalls.length === 1 ? '' : 's'} · ${entry.iterations} iteration${entry.iterations === 1 ? '' : 's'}${entry.affectedEntities.length > 0 ? ` · affected: ${entry.affectedEntities.join(', ')}` : ' · read-only'})`}
+            >
+              <div className="space-y-2">
+                {entry.toolCalls.map((call, i) => (
+                  <ToolCallRow key={i} call={call} />
+                ))}
+                {entry.hitIterationCap && (
+                  <p className="font-mono text-[11px] text-ember-300 mt-3">
+                    ⚠ Hit iteration cap — loop stopped before the agent
+                    signaled completion.
+                  </p>
+                )}
+              </div>
+            </DetailSection>
+          )}
+
           {/* Messages array */}
           <DetailSection title={`Messages array (${entry.messagesSent.length})`}>
             <div className="space-y-2">
@@ -280,6 +335,107 @@ function Stat({
       >
         {value}
       </span>
+    </div>
+  )
+}
+
+// ─── Tool trace row ──────────────────────────────────────────────────
+// One call in the agent's tool loop. Collapsed by default; click to
+// expand the full input + result JSON. Iteration badge doubles as the
+// visual hierarchy so multi-iteration loops read as a grouped timeline.
+
+function truncate(s: string, max = 140): string {
+  if (s.length <= max) return s
+  return s.slice(0, max) + '…'
+}
+
+function ToolCallRow({ call }: { call: ToolCallEntry }) {
+  const [open, setOpen] = useState(false)
+  const result = call.result as
+    | { success?: boolean; error?: string; code?: string; data?: unknown }
+    | null
+  const succeeded = result?.success === true
+  const isPreview =
+    succeeded &&
+    typeof result?.data === 'object' &&
+    result?.data !== null &&
+    (result.data as { requires_confirmation?: unknown })
+      .requires_confirmation === true
+
+  // Summary line — tool name + compact arg preview.
+  const argSummary = (() => {
+    try {
+      const json = JSON.stringify(call.input)
+      return json === '{}' ? '()' : `(${truncate(json.slice(1, -1))})`
+    } catch {
+      return '(unserializable)'
+    }
+  })()
+
+  // Short result tag.
+  const resultTag = !succeeded
+    ? `✗ ${result?.error ?? 'failed'}`
+    : isPreview
+      ? 'preview (awaiting confirmation)'
+      : '✓'
+
+  return (
+    <div className="bg-obsidian-950 border border-obsidian-800 rounded-md">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full text-left grid grid-cols-[52px_1fr_auto_20px] items-start gap-3 px-3 py-2 hover:bg-obsidian-800/40 transition-colors"
+      >
+        <span className="font-mono text-[10px] text-text-tertiary uppercase tracking-wider mt-0.5">
+          iter {call.iteration}
+        </span>
+        <span className="min-w-0">
+          <span className="font-mono text-[12px] text-ember-300">
+            {call.name}
+          </span>
+          <span className="font-mono text-[11px] text-text-tertiary">
+            {argSummary}
+          </span>
+          <span
+            className={`ml-2 font-mono text-[11px] ${
+              succeeded
+                ? isPreview
+                  ? 'text-ember-300/80'
+                  : 'text-success-500'
+                : 'text-danger-500'
+            }`}
+          >
+            {resultTag}
+          </span>
+        </span>
+        <span className="font-mono text-[10px] text-text-tertiary tabular-nums">
+          {call.durationMs}ms
+        </span>
+        <span className="font-mono text-text-tertiary text-sm leading-none">
+          {open ? '▾' : '▸'}
+        </span>
+      </button>
+
+      {open && (
+        <div className="border-t border-obsidian-800 px-3 py-3 space-y-2">
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-tertiary mb-1">
+              Input
+            </p>
+            <pre className="font-mono text-[11px] text-text-secondary whitespace-pre-wrap break-words bg-obsidian-900/60 rounded-sm p-2 max-h-[240px] overflow-auto eidrix-scrollbar">
+              {JSON.stringify(call.input, null, 2)}
+            </pre>
+          </div>
+          <div>
+            <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-tertiary mb-1">
+              Result
+            </p>
+            <pre className="font-mono text-[11px] text-text-secondary whitespace-pre-wrap break-words bg-obsidian-900/60 rounded-sm p-2 max-h-[240px] overflow-auto eidrix-scrollbar">
+              {JSON.stringify(call.result, null, 2)}
+            </pre>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

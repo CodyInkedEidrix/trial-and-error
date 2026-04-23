@@ -361,6 +361,81 @@ function formatTotals(
   return `Totals: ${totalCustomers} customers | ${totalJobs} jobs (${open} open, ${completed} completed, ${cancelled} cancelled)`
 }
 
+// ─── Ambient workspace overview ──────────────────────────────────────
+// Always-on aggregate block injected regardless of context_mode. Gives
+// the agent orientation — "how many customers exist, what's their
+// status split, same for jobs and proposals" — without shipping any
+// row-level data. Six lines, O(1) in tenant size (grouped counts).
+//
+// Why this exists: with `context_mode = off`, the agent has ZERO sense
+// of the workspace shape. Asking "how many leads do I have?" forces a
+// tool round trip even though the answer is a single aggregate. The
+// overview fixes that without compromising the "tools for row data"
+// discipline. See REAL_EIDRIX_NOTES "Layered context model".
+//
+// Fails soft: if the overview query errors, the chat still proceeds
+// with an empty block. The agent gets fewer free answers; no crash.
+
+type StatusAgg = { total: number; byStatus: Record<string, number> }
+
+function aggregateByStatus(
+  rows: { status: string }[] | null | undefined,
+): StatusAgg {
+  const byStatus: Record<string, number> = {}
+  if (!rows) return { total: 0, byStatus }
+  for (const row of rows) {
+    byStatus[row.status] = (byStatus[row.status] ?? 0) + 1
+  }
+  return { total: rows.length, byStatus }
+}
+
+function formatStatusLine(label: string, agg: StatusAgg): string {
+  if (agg.total === 0) return `0 ${label}`
+  const pieces = Object.entries(agg.byStatus)
+    .sort((a, b) => b[1] - a[1]) // most common first
+    .map(([s, n]) => `${n} ${s}`)
+  return `${agg.total} ${label} (${pieces.join(', ')})`
+}
+
+async function buildWorkspaceOverview(
+  supabase: ReturnType<typeof createUserClient>,
+): Promise<string> {
+  // Three parallel aggregate fetches — id + status only, cheap columns.
+  // RLS scopes to the caller's org automatically.
+  const [customersRes, jobsRes, proposalsRes] = await Promise.all([
+    supabase.from('customers').select('id, status'),
+    supabase.from('jobs').select('id, status'),
+    supabase.from('proposals').select('id, status'),
+  ])
+
+  if (customersRes.error || jobsRes.error || proposalsRes.error) {
+    console.error('[chat] workspace overview fetch failed:', {
+      customers: customersRes.error?.message,
+      jobs: jobsRes.error?.message,
+      proposals: proposalsRes.error?.message,
+    })
+    return ''
+  }
+
+  const customers = aggregateByStatus(customersRes.data)
+  const jobs = aggregateByStatus(jobsRes.data)
+  const proposals = aggregateByStatus(proposalsRes.data)
+
+  // Skip the block entirely if the workspace is totally empty — saves
+  // a few tokens and avoids telling the agent "0 everything" which it
+  // might parrot back instead of taking action.
+  if (customers.total === 0 && jobs.total === 0 && proposals.total === 0) {
+    return ''
+  }
+
+  return [
+    '=== WORKSPACE OVERVIEW ===',
+    formatStatusLine('customers', customers),
+    formatStatusLine('jobs', jobs),
+    formatStatusLine('proposals', proposals),
+  ].join('\n')
+}
+
 async function buildContextPayload(
   supabase: ReturnType<typeof createUserClient>,
   mode: ContextMode,
@@ -675,7 +750,13 @@ export default async (req: Request, _context: Context) => {
   const userId = userResponse?.user?.id ?? ''
 
   const settings = await loadAgentSettings(supabaseForUser, orgId)
-  const context = await buildContextPayload(supabaseForUser, settings.context_mode)
+
+  // Fetch context payload and workspace overview in parallel — they
+  // hit different queries with no dependencies.
+  const [context, workspaceOverviewBlock] = await Promise.all([
+    buildContextPayload(supabaseForUser, settings.context_mode),
+    buildWorkspaceOverview(supabaseForUser),
+  ])
 
   // UI context is tiny and always useful for "this" / "him" resolution.
   // Not gated by context_mode — even when data injection is 'off', the
@@ -685,13 +766,21 @@ export default async (req: Request, _context: Context) => {
     ? formatUiContextPrompt(uiContextParsed)
     : ''
 
-  // Assemble: base prompt → UI context → business data. Order matters:
-  // UI context sits between the voice/instructions and the raw data,
-  // so references in the data block ("Al Schindler") read against the
-  // context immediately above.
+  // Assemble: voice → UI context → workspace overview → business data.
+  // Reasoning on the order:
+  //   - Voice sets the tone (how to respond)
+  //   - UI context says where the user IS
+  //   - Workspace overview says what EXISTS (the shape of the world)
+  //   - Business data is the row-level detail (only in subset/full)
+  //
+  // The overview is ALWAYS injected regardless of context_mode — it's
+  // ~6 lines, aggregate-only, scales to millions of rows at O(1) size,
+  // and gives Claude orientation that materially improves tool choice.
+  // See REAL_EIDRIX_NOTES "Layered context model" for the why.
   const promptParts = [
     settings.system_prompt,
     uiContextBlock,
+    workspaceOverviewBlock,
     context.injectedText,
   ].filter((s) => s && s.length > 0)
   const finalSystemPrompt = promptParts.join('\n\n')

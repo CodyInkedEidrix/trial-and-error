@@ -36,12 +36,15 @@ const CONTEXT_OPTIONS: { value: ContextMode; label: string }[] = [
 
 // Post-AC-03 copy: Eidrix now has tools (searchCustomers, findJobsFor*,
 // summarizeForCustomer, etc.) — so "Off" no longer means blindness. It
-// means the agent reads your data on demand by calling tools. This is
-// the new default: cheapest on tokens, scales to thousands of records.
+// means the agent reads row-level data on demand by calling tools.
+// Workspace totals (customer/job/proposal counts by status) are
+// ALWAYS preloaded on every request regardless of mode — they're
+// tiny aggregates that give the agent free orientation. See
+// REAL_EIDRIX_NOTES "Layered context model" for the design.
 const CONTEXT_HINTS: Record<ContextMode, string> = {
-  off: 'Nothing preloaded — Eidrix reads your data on demand via tools (search, find, summarize). Cheapest on tokens, scales best. Recommended.',
-  subset: 'Recent customers and open jobs preloaded. Useful when "right now" questions dominate. Tools still available for older data.',
-  full: 'Everything preloaded. Fine on small datasets; redundant with tools at scale.',
+  off: 'Workspace totals preloaded; row-level data fetched on demand via tools (search, find, summarize). Cheapest on tokens, scales best. Recommended.',
+  subset: 'Totals + recent customers + open jobs preloaded. Useful when "right now" questions dominate. Tools still available for older data.',
+  full: 'Totals + every customer + every job preloaded. Fine on small datasets; redundant with tools at scale.',
 }
 
 export default function SettingsView() {

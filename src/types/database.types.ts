@@ -69,6 +69,44 @@ export type Database = {
           },
         ]
       }
+      conversations: {
+        Row: {
+          created_at: string
+          id: string
+          last_message_at: string | null
+          organization_id: string
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          organization_id: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          last_message_at?: string | null
+          organization_id?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "conversations_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       customers: {
         Row: {
           address: string | null
@@ -217,6 +255,117 @@ export type Database = {
           },
         ]
       }
+      memory_facts: {
+        Row: {
+          confidence: number
+          content: string
+          created_at: string
+          entity_id: string | null
+          entity_type: string | null
+          fact_type: Database["public"]["Enums"]["fact_type"]
+          id: string
+          is_active: boolean
+          organization_id: string
+          source_message_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          confidence?: number
+          content: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          fact_type: Database["public"]["Enums"]["fact_type"]
+          id?: string
+          is_active?: boolean
+          organization_id: string
+          source_message_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          confidence?: number
+          content?: string
+          created_at?: string
+          entity_id?: string | null
+          entity_type?: string | null
+          fact_type?: Database["public"]["Enums"]["fact_type"]
+          id?: string
+          is_active?: boolean
+          organization_id?: string
+          source_message_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "memory_facts_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "memory_facts_source_message_id_fkey"
+            columns: ["source_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      messages: {
+        Row: {
+          content: string
+          conversation_id: string
+          created_at: string
+          id: string
+          is_active: boolean
+          metadata: Json
+          organization_id: string
+          role: Database["public"]["Enums"]["message_role"]
+          user_id: string
+        }
+        Insert: {
+          content: string
+          conversation_id: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          organization_id: string
+          role: Database["public"]["Enums"]["message_role"]
+          user_id: string
+        }
+        Update: {
+          content?: string
+          conversation_id?: string
+          created_at?: string
+          id?: string
+          is_active?: boolean
+          metadata?: Json
+          organization_id?: string
+          role?: Database["public"]["Enums"]["message_role"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "messages_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "messages_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       organizations: {
         Row: {
           created_at: string
@@ -316,6 +465,12 @@ export type Database = {
         | "claude-opus-4-7"
       context_mode: "off" | "subset" | "full"
       customer_status: "lead" | "active" | "paused" | "archived"
+      fact_type:
+        | "preference"
+        | "rule"
+        | "context"
+        | "commitment"
+        | "observation"
       job_status:
         | "draft"
         | "scheduled"
@@ -323,6 +478,7 @@ export type Database = {
         | "completed"
         | "cancelled"
       membership_role: "owner" | "admin" | "member"
+      message_role: "user" | "assistant"
       proposal_status: "draft" | "sent" | "approved" | "rejected"
     }
     CompositeTypes: {
@@ -461,6 +617,7 @@ export const Constants = {
       ],
       context_mode: ["off", "subset", "full"],
       customer_status: ["lead", "active", "paused", "archived"],
+      fact_type: ["preference", "rule", "context", "commitment", "observation"],
       job_status: [
         "draft",
         "scheduled",
@@ -469,6 +626,7 @@ export const Constants = {
         "cancelled",
       ],
       membership_role: ["owner", "admin", "member"],
+      message_role: ["user", "assistant"],
       proposal_status: ["draft", "sent", "approved", "rejected"],
     },
   },

@@ -26,7 +26,7 @@ import type {
 } from '../components/brand/eye-config'
 import type {
   Message,
-  MessageStatus,
+  MessageMetadata,
   PendingAction,
   ToolErrorSummary,
 } from '../types/message'
@@ -36,6 +36,7 @@ import { useDebugStore } from './debugStore'
 import { useCustomerStore } from './customerStore'
 import { useJobStore } from './jobStore'
 import { useProposalStore } from './proposalStore'
+import { useMessagesStore } from './messagesStore'
 import { snapshotUiContext } from './uiContext'
 import type { UiContext } from '../types/uiContext'
 
@@ -117,14 +118,40 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     if (!trimmed) return
     if (get().isStreaming) return // one stream at a time
 
-    // ─── Set up the two new messages ──────────────────────────────
-    const userMessage: Message = {
-      id: uuid(),
-      role: 'user',
-      content: trimmed,
-      createdAt: nowIso(),
+    // ─── Set streaming gate FIRST ──────────────────────────────────
+    // The mirror subscription (bottom of file) only clobbers
+    // chatStore.messages when isStreaming is false. Flipping it true
+    // BEFORE appendUser means the subscriber that fires when the
+    // persisted user message lands doesn't overwrite the state we're
+    // about to set up.
+    set({
+      isStreaming: true,
+      currentEyeState: 'thinking',
+      currentReaction: 'acknowledge',
+    })
+
+    // ─── Persist user message ──────────────────────────────────────
+    // Need the DB id before we fire the extraction trigger post-response.
+    // If persistence fails (no conversation, RLS block, etc.) the store
+    // toasts an error; we reset the gate and bail without starting the
+    // stream.
+    const persistedUserMessage =
+      await useMessagesStore.getState().appendUser(trimmed)
+    if (!persistedUserMessage) {
+      set({ isStreaming: false, currentEyeState: 'idle', currentReaction: null })
+      return
     }
 
+    // messagesStore just appended; the subscription's isStreaming gate
+    // paused the mirror, so chatStore.messages still reflects whatever
+    // we had before sending. Rebuild explicitly from the fresh
+    // persisted snapshot plus our streaming placeholder.
+    const persistedSoFar = useMessagesStore.getState().messages
+
+    // ─── Streaming assistant placeholder ───────────────────────────
+    // Transient — lives only in chatStore until stream completes, then
+    // gets persisted via messagesStore.appendAssistant and replaced
+    // with the DB-backed row.
     const assistantId = uuid()
     const assistantMessage: Message = {
       id: assistantId,
@@ -134,19 +161,16 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       status: 'streaming',
     }
 
-    // Build the API payload BEFORE mutating state — excludes the empty
-    // streaming placeholder (no value in sending "" to the model) and
-    // any prior errored assistant messages (they'd confuse it).
-    const messagesForApi = [...get().messages, userMessage]
+    // Build the API payload from persisted messages — excludes the
+    // empty streaming placeholder (no value sending "" to the model)
+    // and any prior errored assistant messages (they'd confuse it).
+    const messagesForApi = persistedSoFar
       .filter((m) => m.status !== 'error')
       .map(({ role, content }) => ({ role, content }))
 
-    set((state) => ({
-      messages: [...state.messages, userMessage, assistantMessage],
-      isStreaming: true,
-      currentEyeState: 'thinking',
-      currentReaction: 'acknowledge',
-    }))
+    set({
+      messages: [...persistedSoFar, assistantMessage],
+    })
 
     // ─── RAF-batched text flusher ─────────────────────────────────
     // Tokens can arrive at 30–80/sec. Flushing each one triggers a
@@ -315,39 +339,14 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         appendChunk(chunk)
       }
 
-      set((state) => ({
-        messages: state.messages.map((m) =>
-          m.id === assistantId
-            ? {
-                ...m,
-                // Empty response edge case — the stream ended but no
-                // content_block_delta ever fired. Show a minimal
-                // explanation rather than a ghost-empty bubble.
-                content:
-                  m.content.length > 0
-                    ? m.content
-                    : "I didn't have anything to say there. Try rephrasing?",
-                status: 'complete' as MessageStatus,
-              }
-            : m,
-        ),
-        isStreaming: false,
-        currentEyeState: 'idle',
-        currentReaction: 'completion',
-      }))
+      // Empty-response fallback — stream ended with no text deltas.
+      const finalContent =
+        accumulatedResponse.length > 0
+          ? accumulatedResponse
+          : "I didn't have anything to say there. Try rephrasing?"
 
-      // Push debug entry for the Agent Debug tab. usageEvent should
-      // always be present after a successful stream (the function
-      // always emits it before close), but guard anyway.
-      if (usageEvent) {
-        useDebugStore.getState().pushEntry(
-          buildDebugEntry(trimmed, messagesForApi, accumulatedResponse, usageEvent, null),
-        )
-      }
-
-      // Surface tool errors on the assistant message so the user sees
-      // a "⚠ tool error" indicator even when Claude's text paraphrases
-      // over the failure.
+      // Surface tool errors for the UI badge (rendered before persist
+      // so the streaming bubble gets them immediately).
       const toolErrors: ToolErrorSummary[] = (usageEvent?.toolCalls ?? [])
         .filter((t) => {
           const r = t.result as { success?: boolean } | null
@@ -361,18 +360,61 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             message: r?.error ?? 'Tool failed',
           }
         })
-      if (toolErrors.length > 0) {
-        set((state) => ({
-          messages: state.messages.map((m) =>
-            m.id === assistantId ? { ...m, toolErrors } : m,
-          ),
-        }))
+
+      // Capture pendingAction from the in-flight message before we
+      // rebuild the list from persisted state (it lives on the
+      // streaming placeholder, not yet in the DB).
+      const inFlightPendingAction = get().messages.find(
+        (m) => m.id === assistantId,
+      )?.pendingAction
+
+      // ─── Persist the assistant turn ─────────────────────────────
+      // Metadata includes both the usage-event fields (for Debug tab)
+      // AND the UX overlays (pendingAction, toolErrors) so they
+      // survive future messagesStore resyncs. messagesStore's
+      // dbRowToMessage promotes the overlay fields back to the
+      // top-level Message shape on load.
+      const assistantMetadata: MessageMetadata = {
+        ...buildAssistantMetadata(usageEvent, null),
+        ...(inFlightPendingAction ? { pendingAction: inFlightPendingAction } : {}),
+        ...(toolErrors.length > 0 ? { toolErrors } : {}),
+      }
+
+      await useMessagesStore.getState().appendAssistant(
+        finalContent,
+        assistantMetadata,
+        'complete',
+      )
+
+      // Mirror from messagesStore — the overlays come back via
+      // dbRowToMessage's metadata promotion, no separate decorate
+      // step needed.
+      set({
+        messages: useMessagesStore.getState().messages,
+        isStreaming: false,
+        currentEyeState: 'idle',
+        currentReaction: 'completion',
+      })
+
+      // Push debug entry for the Agent Debug tab. usageEvent should
+      // always be present after a successful stream (the function
+      // always emits it before close), but guard anyway.
+      if (usageEvent) {
+        useDebugStore.getState().pushEntry(
+          buildDebugEntry(trimmed, messagesForApi, accumulatedResponse, usageEvent, null),
+        )
       }
 
       // Refetch only the stores the function reports as affected.
       // Read-only turns (search/find/summarize) get zero refetches;
       // writes get exactly the stores they touched.
       refreshAffected(usageEvent?.affectedEntities)
+
+      // ─── Fire fact extraction (fire-and-forget) ─────────────────
+      // Netlify `-background` functions are queued independently from
+      // the triggering request, so this fetch's body reaches the
+      // function even if the page navigates away. User never waits.
+      fireExtractFacts(persistedUserMessage.id, accessToken)
     } catch (err) {
       // Cancel any pending RAF flush — no more content coming.
       if (rafId != null) {
@@ -381,31 +423,42 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       }
 
       // Preserve whatever partial content streamed before failure;
-      // flip the message to 'error' status for UI to key off.
+      // persist it with status=error so the UI can style it + the
+      // user can scroll back to see what went wrong.
       const fallbackMessage =
         err instanceof StreamError
           ? err.userMessage()
           : 'Connection lost. Try again.'
+      const preservedPartial = accumulatedResponse.length > 0
+      const errorContent = preservedPartial
+        ? accumulatedResponse
+        : fallbackMessage
 
-      set((state) => ({
-        messages: state.messages.map((m) => {
-          if (m.id !== assistantId) return m
-          const preservedPartial = m.content.length > 0
-          return {
-            ...m,
-            content: preservedPartial ? m.content : fallbackMessage,
-            status: 'error' as MessageStatus,
-          }
-        }),
+      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
+
+      const assistantMetadata: MessageMetadata = buildAssistantMetadata(
+        usageEvent,
+        errorMessage,
+      )
+
+      // Persist the errored assistant turn too — audit-grade conversation
+      // history includes failures.
+      await useMessagesStore.getState().appendAssistant(
+        errorContent,
+        assistantMetadata,
+        'error',
+      )
+
+      // Resync + reset streaming state.
+      set({
+        messages: useMessagesStore.getState().messages,
         isStreaming: false,
         currentEyeState: 'idle',
         currentReaction: 'uncertainty',
-      }))
+      })
 
       // Push a debug entry for the error too — the Debug tab is most
       // useful when something went wrong, so don't drop these.
-      const errorMessage =
-        err instanceof Error ? err.message : 'Unknown error'
       useDebugStore.getState().pushEntry(
         buildDebugEntry(trimmed, messagesForApi, accumulatedResponse, usageEvent, errorMessage),
       )
@@ -414,6 +467,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       // committed to the DB. Refresh affected stores so the user sees
       // the partial work rather than a misleading "nothing changed" UI.
       refreshAffected(usageEvent?.affectedEntities)
+
+      // Fire extraction even on error — the user message was still
+      // persisted and may still contain durable content, regardless
+      // of whether the assistant response succeeded.
+      fireExtractFacts(persistedUserMessage.id, accessToken)
     }
   },
 
@@ -589,4 +647,97 @@ class StreamError extends Error {
     if (this.status === 400) return "I couldn't understand that request. Try again."
     return this.message || 'Connection lost. Try again.'
   }
+}
+
+// ─── AC-04 helpers ──────────────────────────────────────────────────
+
+/** Extract the fields the Debug tab + Memory debug view care about
+ *  from the in-flight usage event and pack them into the message's
+ *  persisted metadata column. */
+function buildAssistantMetadata(
+  usageEvent: StreamEvent | null,
+  errorMessage: string | null,
+): MessageMetadata {
+  return {
+    model: usageEvent?.model,
+    contextMode: usageEvent?.contextMode,
+    inputTokens: usageEvent?.inputTokens,
+    outputTokens: usageEvent?.outputTokens,
+    cacheReadInputTokens: usageEvent?.cacheReadInputTokens,
+    cacheCreationInputTokens: usageEvent?.cacheCreationInputTokens,
+    systemPromptBytes: usageEvent?.systemPromptBytes,
+    responseTimeMs: usageEvent?.responseTimeMs,
+    toolCalls: usageEvent?.toolCalls,
+    iterations: usageEvent?.iterations,
+    hitIterationCap: usageEvent?.hitIterationCap,
+    affectedEntities: usageEvent?.affectedEntities,
+    errorMessage,
+  }
+}
+
+/** Kick off fact extraction in the background. Fire-and-forget: we
+ *  never await this — the Netlify `-background` function is queued
+ *  independently and will run regardless of whether the client waits
+ *  for a response. See curriculum/app-capabilities/ac-04-agent-memory.md. */
+function fireExtractFacts(userMessageId: string, accessToken: string) {
+  // Short-circuit on empty token — the session expired or getSession
+  // returned nothing. The background function would reject with 401
+  // but fetch().catch only catches network failures, so we'd silently
+  // drop extraction without any signal that it wasn't running.
+  if (!accessToken) {
+    console.warn(
+      '[chat] skipping extract-facts dispatch: no access token (session may be expired)',
+    )
+    return
+  }
+
+  void fetch('/.netlify/functions/extract-facts-background', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({ userMessageId }),
+  })
+    .then((res) => {
+      // -background functions always respond with 202 to the triggering
+      // HTTP call regardless of the handler's outcome — but if we ever
+      // see a 401/403 here, something is wrong with auth plumbing.
+      if (res.status === 401 || res.status === 403) {
+        console.warn(
+          '[chat] extract-facts auth rejected:',
+          res.status,
+          res.statusText,
+        )
+      }
+    })
+    .catch((err) => {
+      // Non-fatal — log only. A failed extraction trigger doesn't
+      // affect the user's current turn; the next chat message's
+      // extraction still fires independently.
+      console.warn('[chat] extract-facts dispatch failed:', err)
+    })
+}
+
+// ─── messagesStore → chatStore mirror ────────────────────────────────
+// When the persisted message list changes and chatStore isn't actively
+// streaming, sync chatStore.messages to match. This handles:
+//   - initial load (messagesStore.loadForActiveConversation completes)
+//   - conversation switch (future multi-conversation UI)
+//   - external insert (unlikely today, but the pattern is correct)
+//
+// During streaming, chatStore.messages holds [...persisted, streamingPlaceholder]
+// and we skip the mirror so the placeholder isn't clobbered.
+
+useMessagesStore.subscribe((state, prevState) => {
+  if (state.messages === prevState.messages) return
+  if (useChatStore.getState().isStreaming) return
+  useChatStore.setState({ messages: state.messages })
+})
+
+// Initial seed in case messagesStore already has data by the time
+// chatStore's module evaluates (order of imports shouldn't matter,
+// but defensive).
+if (useMessagesStore.getState().messages.length > 0) {
+  useChatStore.setState({ messages: useMessagesStore.getState().messages })
 }

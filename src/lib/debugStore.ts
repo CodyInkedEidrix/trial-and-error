@@ -18,6 +18,7 @@
 import { create } from 'zustand'
 
 import { MODEL_META, type AgentModel } from '../types/agentSettings'
+import type { PlanStep } from '../types/activePlan'
 import type { UiContext } from './../types/uiContext'
 
 const MAX_ENTRIES = 10
@@ -116,6 +117,14 @@ export interface DebugEntry {
    *  no facts retrieved (fresh user, too-short message, or no
    *  relevant matches). */
   retrievedMemories: RetrievedMemoryEntry[]
+
+  // ─── AC-05 — agentic plan trace ──────────────────────────────────
+  /** The plan id + final step state for this turn, when the agent ran
+   *  an agentic plan. null on turns without a plan. Debug tab renders
+   *  these as a nested timeline: plan header → steps (with final
+   *  status) → iteration-grouped tool calls. */
+  activePlanId: string | null
+  activePlanSteps: PlanStep[]
 }
 
 export interface RetrievedMemoryEntry {

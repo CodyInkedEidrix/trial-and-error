@@ -716,6 +716,11 @@ interface StreamEvent {
     confidence: number
     similarity: number
   }>
+  // AC-05 — plan-summary fields in the usage event. null / empty when
+  // the turn didn't involve an agentic plan. Debug tab uses these to
+  // render the nested plan trace.
+  activePlanId?: string | null
+  activePlanSteps?: PlanStep[]
 }
 
 /**
@@ -765,6 +770,8 @@ function buildDebugEntry(
       confidence: m.confidence,
       similarity: m.similarity,
     })),
+    activePlanId: usageEvent?.activePlanId ?? null,
+    activePlanSteps: usageEvent?.activePlanSteps ?? [],
   }
 }
 

@@ -40,6 +40,12 @@ import type { Context } from '@netlify/functions'
 import { createClient } from '@supabase/supabase-js'
 
 import type { Database } from '../../src/types/database.types'
+import type { PlanStep, PlanStatus } from '../../src/types/activePlan'
+import {
+  DEFAULT_CONTEXT_MODE,
+  DEFAULT_MODEL,
+  DEFAULT_SYSTEM_PROMPT,
+} from '../../src/types/agentSettings'
 import {
   formatUiContextPrompt,
   parseUiContext,
@@ -48,6 +54,7 @@ import {
 import { TOOL_AFFECTS, TOOL_REGISTRY, TOOL_SCHEMAS } from './_lib/tools'
 import type { EntityType } from './_lib/tools'
 import type { ToolContext, ToolResult } from './_lib/tools'
+import { formatToolSummary } from './_lib/tools/toolSummary'
 import {
   embeddingToVectorParam,
   generateEmbedding,
@@ -65,11 +72,17 @@ const CORS_HEADERS = {
 // ─── Constants ───────────────────────────────────────────────────────
 
 const MAX_TOKENS = 2048
-/** Hard cap on loop iterations. A runaway loop burns tokens and may
- *  exceed Netlify's function timeout. 10 is generous — most agentic
- *  flows complete in 1-3 iterations. Hitting this cap emits a graceful
- *  "stopped at N steps" synthetic response. */
-const MAX_ITERATIONS = 10
+/** Hard cap on loop iterations. Sonnet 4.6 tends to serialize tool
+ *  calls one-per-iteration unless explicitly pushed to batch, so a
+ *  real multi-entity request (e.g., "add 4 customers, create 2-3
+ *  bids for each") can exceed 25 easily. 40 gives headroom without
+ *  runaway-loop risk.
+ *
+ *  Graceful-degradation nudge fires at MAX_ITERATIONS - 3 so Claude
+ *  can batch remaining work or produce a summary before the hard
+ *  stop. The warning is phrased as a nudge, not a command to quit. */
+const MAX_ITERATIONS = 40
+const ITERATION_CAP_WARNING = MAX_ITERATIONS - 3
 
 /** Ceiling on how many destructive tool COMMITS can happen in a single
  *  chat request. Session 2 hardening — belt-and-suspenders on top of
@@ -88,34 +101,14 @@ const DESTRUCTIVE_TOOLS = new Set<string>([
 const SUBSET_RECENT_DAYS = 30
 const OPEN_JOB_STATUSES = ['draft', 'scheduled', 'in_progress'] as const
 
-// ─── Defaults — mirror src/types/agentSettings.ts ────────────────────
-// Post-AC-03 default flip: context_mode defaults to 'off'. With tools
-// available, the agent can fetch exactly what it needs on demand via
-// searchCustomers / findJobsByStatus / summarizeForCustomer. "Off" is
-// now the cheapest AND most scalable default. Subset remains available
-// for users who want pre-loaded recent context; Full stays for debug
-// / small-dataset work.
-
-const DEFAULT_SYSTEM_PROMPT = `You are Eidrix — an operational assistant embedded in a small business owner's workspace.
-
-You see their customers, jobs, and proposals (when they've enabled context, and on demand via your tools). Your job is to help them think through real operational decisions: who needs follow-up, what's blocking a job, where their attention is best spent today.
-
-You have tools to create, update, delete, and find customers, jobs, and proposals. When the user asks for a concrete operation (add/update/delete/find), use the appropriate tool. When the user asks for explanation or opinion, respond directly without tools. When you're uncertain whether to act or ask, prefer one clear clarifying question over guessing.
-
-If the user refers to someone by partial name and you don't already have that customer in context, use searchCustomers first to resolve the id before acting. If multiple customers match, ask which they meant with specific detail ("Which Joe — Joe Smith with 3 open jobs, or Joe Martinez?").
-
-DESTRUCTIVE OPERATIONS (deleteCustomer, deleteJob, deleteProposal) ARE TWO-PHASE. Phase 1: call the tool with just the target id and NO confirmation_token. The executor returns a preview with { requires_confirmation: true, summary, confirmation_token }. You then explain the summary to the user in plain language and wait for them to confirm. Phase 2: after the user confirms ("yes", "confirm", "go ahead", clicking the Confirm button), call the same tool AGAIN with the same id AND the confirmation_token from the preview. That's when it actually happens. Never skip phase 1. The phrase "delete X" on its own is a REQUEST, not a CONFIRMATION.
-
-If UI context identifies which record the user is viewing (see CURRENT UI CONTEXT below, when present), use it to resolve references like "this customer", "him/her", "that proposal". Explicit mentions of other names always override UI context.
-
-For broad or vague requests ("clean up my leads", "archive old stuff") ask what they mean before acting.
-
-Be direct. Be specific. When the data shows a thing, name it. When you don't know, say so plainly — never invent.
-
-Skip performative enthusiasm. Skip "Great question!" Skip exclamation points. They're a contractor or shop owner, not an audience.`
-
-const DEFAULT_CONTEXT_MODE = 'off'
-const DEFAULT_MODEL = 'claude-sonnet-4-6'
+// ─── Defaults ────────────────────────────────────────────────────────
+// DEFAULT_SYSTEM_PROMPT / DEFAULT_CONTEXT_MODE / DEFAULT_MODEL are
+// imported from src/types/agentSettings.ts — single source of truth
+// shared with the client-side lazy-upsert path. If you edit any of
+// them, the change applies to both seed paths automatically. Keeping
+// them in one place is the only way to prevent silent drift between
+// "new org gets seeded by the server" and "existing org gets seeded
+// by the client's Settings UI."
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -129,6 +122,13 @@ interface RequestBody {
   /** Snapshot of where the user was looking when they hit send. Used
    *  to resolve references like "this customer" without a tool call. */
   uiContext?: unknown
+  /** AC-04+: the conversation this request belongs to. chatStore
+   *  passes this after persisting the user message. Used for AC-05's
+   *  active_plans linkage. */
+  conversationId?: string
+  /** AC-04+: id of the user message that triggered this request.
+   *  Used for AC-05's active_plans.triggering_message_id audit link. */
+  userMessageId?: string
 }
 
 type ContextMode = 'off' | 'subset' | 'full'
@@ -364,6 +364,160 @@ function formatTotals(
   const completed = jobStatusCounts['completed'] ?? 0
   const cancelled = jobStatusCounts['cancelled'] ?? 0
   return `Totals: ${totalCustomers} customers | ${totalJobs} jobs (${open} open, ${completed} completed, ${cancelled} cancelled)`
+}
+
+// ─── Plan lifecycle (AC-05 Session 1) ─────────────────────────────────
+// Helpers that manage the active_plans row + emit the three custom
+// SSE events to the client:
+//
+//   eidrix_plan_started   — fired on first emitPlanStep of a request
+//   eidrix_plan_step      — fired on every emitPlanStep (including first)
+//   eidrix_plan_complete  — fired when the plan ends (complete/stopped/failed)
+//
+// Plan state is intentionally scoped to one chat request — one plan
+// per request, one request per active plan. Concurrent plans aren't
+// supported and aren't needed for Trial and Error.
+
+interface PlanInput {
+  id: string
+  title: string
+  status: PlanStep['status']
+}
+
+/** Merge a single PlanStep into an existing steps array. If the step
+ *  id is already present, update it in place (and stamp startedAt /
+ *  completedAt as status transitions through active / complete / failed).
+ *  If new, append with emittedAt stamped. Pure function — the caller
+ *  is responsible for persisting the result. */
+function mergePlanStep(
+  existing: PlanStep[],
+  input: PlanInput,
+  now: string,
+): PlanStep[] {
+  const idx = existing.findIndex((s) => s.id === input.id)
+  if (idx === -1) {
+    // New step — first emission. Stamp emittedAt; startedAt/completedAt
+    // set based on status if it's not just 'pending'.
+    const next: PlanStep = {
+      id: input.id,
+      title: input.title,
+      status: input.status,
+      emittedAt: now,
+    }
+    if (input.status === 'active') next.startedAt = now
+    if (input.status === 'complete' || input.status === 'failed') {
+      next.completedAt = now
+    }
+    return [...existing, next]
+  }
+
+  // Existing step — update. Keep the original emittedAt + any prior
+  // startedAt; fill in startedAt / completedAt as status transitions.
+  const prev = existing[idx]
+  const updated: PlanStep = {
+    ...prev,
+    title: input.title,  // allow title refinement on update
+    status: input.status,
+  }
+  if (input.status === 'active' && !prev.startedAt) {
+    updated.startedAt = now
+  }
+  if (
+    (input.status === 'complete' || input.status === 'failed') &&
+    !prev.completedAt
+  ) {
+    updated.completedAt = now
+  }
+  const next = [...existing]
+  next[idx] = updated
+  return next
+}
+
+/** Poll the active_plans row for requested_stop. Returns true if the
+ *  user has requested stop. Swallows errors (returns false) — a
+ *  transient DB blip shouldn't kill an in-flight plan; worst case
+ *  the user waits one more iteration for their stop to land. */
+async function pollForStop(
+  supabase: ReturnType<typeof createUserClient>,
+  planId: string,
+): Promise<boolean> {
+  const { data, error } = await supabase
+    .from('active_plans')
+    .select('requested_stop')
+    .eq('id', planId)
+    .maybeSingle()
+  if (error) {
+    console.warn('[chat] stop poll failed:', error.message)
+    return false
+  }
+  return data?.requested_stop === true
+}
+
+/** Compose the human-readable completion summary for a finalized plan.
+ *  Centralized so the catch path and the happy path produce consistent
+ *  language for the historical chip rendering on the client. */
+function buildCompletionSummary(
+  status: PlanStatus,
+  steps: PlanStep[],
+  reason: string | null,
+): string {
+  const completedCount = steps.filter((s) => s.status === 'complete').length
+  const total = steps.length
+  if (status === 'stopped') {
+    return `Stopped at user request. Completed ${completedCount} of ${total} steps.`
+  }
+  if (status === 'failed') {
+    return reason
+      ? `Plan failed: ${reason}. Completed ${completedCount} of ${total} steps.`
+      : `Plan ended unexpectedly. Completed ${completedCount} of ${total} steps.`
+  }
+  return `Completed all ${total} step${total === 1 ? '' : 's'}.`
+}
+
+/** Persist + emit the terminal SSE event for a plan. Called from both
+ *  the happy path AND the catch block. The catch-path call is load-
+ *  bearing: without it, exceptions in the loop leave active_plans rows
+ *  stuck at status='running' forever, and rehydration on the next page
+ *  load surfaces them as zombies that block every subsequent send via
+ *  the client-side plan send-gate.
+ *
+ *  Best-effort: errors during the DB update are logged but never
+ *  thrown. The SSE event always fires so the client clears its
+ *  activePlan even if the DB write failed. */
+async function finalizePlan(
+  supabase: ReturnType<typeof createUserClient>,
+  planId: string,
+  steps: PlanStep[],
+  status: PlanStatus,
+  reason: string | null,
+  enqueue: (event: unknown) => void,
+): Promise<void> {
+  const completionSummary = buildCompletionSummary(status, steps, reason)
+  const completedAt = new Date().toISOString()
+  try {
+    const { error } = await supabase
+      .from('active_plans')
+      .update({
+        status,
+        steps,
+        completion_summary: completionSummary,
+        completed_at: completedAt,
+      })
+      .eq('id', planId)
+    if (error) {
+      console.warn('[chat] active_plans finalize failed:', error.message)
+    }
+  } catch (err) {
+    console.warn('[chat] active_plans finalize threw:', err)
+  }
+  enqueue({
+    type: 'eidrix_plan_complete',
+    planId,
+    status,
+    steps,
+    completionSummary,
+    completedAt,
+  })
 }
 
 // ─── Memory retrieval (AC-04 Session 2) ───────────────────────────────
@@ -756,6 +910,20 @@ function hasConfirmationToken(input: unknown): boolean {
   return typeof t === 'string' && t.length > 0
 }
 
+/** True when a tool_use block is a phase-2 destructive commit (i.e.,
+ *  a delete with a confirmation_token, which actually mutates). Phase-1
+ *  previews — same tool, no token — are read-only and don't count.
+ *  Centralizes the predicate shared by the rate-cap check, the serial/
+ *  parallel partition, and the counter rollback logic in runBlock. */
+function isDestructiveCommit(block: {
+  name: string
+  input: unknown
+}): boolean {
+  return (
+    DESTRUCTIVE_TOOLS.has(block.name) && hasConfirmationToken(block.input)
+  )
+}
+
 /** True when a tool's success result indicates it previewed rather
  *  than committed — the sentinel is `data.requires_confirmation`. See
  *  netlify/functions/_lib/confirmationToken.ts for the why. */
@@ -950,6 +1118,19 @@ export default async (req: Request, _context: Context) => {
        *  this request. Phase-1 previews don't count since they don't
        *  mutate. */
       let destructiveCommitCount = 0
+      // ─── Plan lifecycle state (AC-05) ────────────────────────────
+      /** Server-generated once the FIRST emitPlanStep fires. Null
+       *  means no plan is active — this chat turn is a simple request. */
+      let activePlanId: string | null = null
+      /** Mirror of active_plans.steps — kept in memory so we can
+       *  update step status without re-reading the row from Supabase.
+       *  The authoritative copy still lives in Postgres (for stop
+       *  polling, rehydration, etc.); this is the working copy. */
+      let activePlanSteps: PlanStep[] = []
+      /** Set true when /chat-stop's poll returns requested_stop=true.
+       *  The loop uses this flag to short-circuit into a wrap-up
+       *  iteration (no tools, just a final summary) and then exit. */
+      let stopRequested = false
       let totalInputTokens = 0
       let totalOutputTokens = 0
       let totalCacheReadInputTokens = 0
@@ -1115,15 +1296,36 @@ export default async (req: Request, _context: Context) => {
             ): Promise<{ block: Anthropic.ToolUseBlock; result: ToolResult }> => {
               const started = Date.now()
 
-              const isDestructiveCommit =
-                DESTRUCTIVE_TOOLS.has(block.name) &&
-                hasConfirmationToken(block.input)
+              // emitPlanStep is a SIGNALING tool, not real work — the
+              // user already sees plan rows updating from the dedicated
+              // plan SSE events. Don't double-narrate it as tool
+              // activity.
+              const isSignalingTool = block.name === 'emitPlanStep'
+
+              // Live tool activity: tells the client UI to render
+              // "Drafting Garage Cleanout · $800" under the active
+              // plan step. The reliable signal — comes from real
+              // tool calls, not the agent's self-reported step
+              // status (which Sonnet 4.6 is inconsistent about).
+              const toolSummary = isSignalingTool
+                ? ''
+                : formatToolSummary(block.name, block.input)
+              if (!isSignalingTool) {
+                enqueue({
+                  type: 'eidrix_tool_started',
+                  name: block.name,
+                  summary: toolSummary,
+                  iteration,
+                })
+              }
+
+              const destructive = isDestructiveCommit(block)
 
               // Check-and-increment BEFORE executing so a concurrent
               // sibling on a parallel path can't also pass the check.
               // (For this serial loop this is belt-and-suspenders, but
               // it keeps the invariant tight.)
-              if (isDestructiveCommit) {
+              if (destructive) {
                 if (destructiveCommitCount >= MAX_DESTRUCTIVE_COMMITS) {
                   const result: ToolResult = {
                     success: false,
@@ -1153,7 +1355,7 @@ export default async (req: Request, _context: Context) => {
               // actually mutate (failed / rejected token / unexpected
               // preview). Keeps the counter aligned with DB reality.
               if (
-                isDestructiveCommit &&
+                destructive &&
                 (!result.success || isPendingConfirmation(result))
               ) {
                 destructiveCommitCount--
@@ -1183,6 +1385,95 @@ export default async (req: Request, _context: Context) => {
                 enqueue(pendingActionEvent(result))
               }
 
+              // ─── emitPlanStep interception (AC-05) ────────────────
+              // The tool executor returned a minimal ack. Now update
+              // the active_plans row + emit the SSE events so the
+              // client's plan card renders live.
+              if (block.name === 'emitPlanStep' && result.success) {
+                const input = block.input as {
+                  id: string
+                  title: string
+                  status: PlanStep['status']
+                }
+                const now = new Date().toISOString()
+                activePlanSteps = mergePlanStep(activePlanSteps, input, now)
+                const step = activePlanSteps.find((s) => s.id === input.id)!
+
+                if (activePlanId === null) {
+                  // First step in this request — create the plan row.
+                  const { data: inserted, error: insertErr } =
+                    await supabaseForUser
+                      .from('active_plans')
+                      .insert({
+                        organization_id: orgId,
+                        user_id: userId,
+                        conversation_id: body.conversationId ?? '',
+                        triggering_message_id: body.userMessageId ?? null,
+                        status: 'running',
+                        steps: activePlanSteps,
+                      })
+                      .select('id, started_at')
+                      .single()
+                  if (insertErr || !inserted) {
+                    console.warn(
+                      '[chat] active_plans insert failed:',
+                      insertErr?.message,
+                    )
+                    // Proceed without persisted plan — the SSE event
+                    // still fires so the UI renders, but rehydration
+                    // won't work. Better than aborting.
+                  } else {
+                    activePlanId = inserted.id
+                    enqueue({
+                      type: 'eidrix_plan_started',
+                      planId: inserted.id,
+                      triggeringMessageId: body.userMessageId ?? null,
+                      firstStep: step,
+                      startedAt: inserted.started_at,
+                    })
+                  }
+                } else {
+                  // Subsequent step — update the row.
+                  const { error: updateErr } = await supabaseForUser
+                    .from('active_plans')
+                    .update({ steps: activePlanSteps })
+                    .eq('id', activePlanId)
+                  if (updateErr) {
+                    console.warn(
+                      '[chat] active_plans update failed:',
+                      updateErr.message,
+                    )
+                  }
+                }
+
+                // Fire the per-step event regardless of persistence
+                // outcome — the UI's live updates are the primary UX.
+                if (activePlanId) {
+                  enqueue({
+                    type: 'eidrix_plan_step',
+                    planId: activePlanId,
+                    step,
+                    steps: activePlanSteps,
+                  })
+                }
+              }
+
+              // Mirror tool_started with a tool_finished event so the
+              // client can flip the active sub-line off (or replace it
+              // with the next call's summary). Carries success so the
+              // client can show ✓ vs ✗ briefly before the next tool
+              // takes over.
+              if (!isSignalingTool) {
+                enqueue({
+                  type: 'eidrix_tool_finished',
+                  name: block.name,
+                  summary: toolSummary,
+                  success: result.success,
+                  durationMs,
+                  iteration,
+                })
+              }
+
               return { block, result }
             }
 
@@ -1190,17 +1481,9 @@ export default async (req: Request, _context: Context) => {
             // check-and-increment — parallel would race past it).
             // Everything else (reads, writes, destructive PREVIEWS)
             // runs in parallel for latency.
-            const destructiveCommits = toolUseBlocks.filter(
-              (b) =>
-                DESTRUCTIVE_TOOLS.has(b.name) &&
-                hasConfirmationToken(b.input),
-            )
+            const destructiveCommits = toolUseBlocks.filter(isDestructiveCommit)
             const parallelBlocks = toolUseBlocks.filter(
-              (b) =>
-                !(
-                  DESTRUCTIVE_TOOLS.has(b.name) &&
-                  hasConfirmationToken(b.input)
-                ),
+              (b) => !isDestructiveCommit(b),
             )
 
             const parallelResults = await Promise.all(
@@ -1244,6 +1527,41 @@ export default async (req: Request, _context: Context) => {
             if (iteration === MAX_ITERATIONS) {
               hitIterationCap = true
             }
+
+            // ─── Stop poll at iteration boundary (AC-05) ─────────
+            // Only check if a plan is active — no plan means no stop
+            // signaling is possible (/chat-stop needs a planId).
+            if (activePlanId) {
+              const shouldStop = await pollForStop(supabaseForUser, activePlanId)
+              if (shouldStop) {
+                stopRequested = true
+                // Inject a synthetic user message telling Claude to
+                // wrap up. No more tool calls — we want a summary
+                // paragraph and end_turn. We continue the loop ONE
+                // more iteration; Claude produces the summary; we
+                // exit via the end_turn branch naturally.
+                workingMessages.push({
+                  role: 'user',
+                  content:
+                    '[SYSTEM] The user has requested STOP. Do not call any more tools. In your next response, produce a short summary of what has been completed so far and what remains undone. Then end the turn.',
+                })
+              }
+            }
+
+            // ─── Graceful-degradation nudge at MAX - 3 ────────────
+            // Phrased as a batching nudge, not a hard "stop now". A
+            // "wrap up and summarize" instruction fires too eagerly —
+            // the agent reports partial progress and stops with work
+            // still to do. Nudging toward batching lets it choose
+            // finish-vs-stop based on actual plan state.
+            if (iteration === ITERATION_CAP_WARNING) {
+              workingMessages.push({
+                role: 'user',
+                content:
+                  `[SYSTEM] Approaching the iteration limit (${MAX_ITERATIONS}, currently ${iteration}). If critical work remains, BATCH multiple tool_use blocks into your next turn to cover more ground per iteration. Only produce a summary + end the turn if you're at a natural stopping point or truly blocked.`,
+              })
+            }
+
             continue
           }
 
@@ -1267,6 +1585,29 @@ export default async (req: Request, _context: Context) => {
                 'Ask me to continue if you\'d like me to keep going.',
             },
           })
+        }
+
+        // ─── Finalize active plan (AC-05) ─────────────────────────
+        // Happy path: derive status from loop outcome and delegate to
+        // the shared finalizePlan helper (which now also handles the
+        // catch path — that's the fix for stuck "running" rows).
+        if (activePlanId) {
+          const finalStatus: PlanStatus = stopRequested
+            ? 'stopped'
+            : hitIterationCap
+              ? 'failed'
+              : 'complete'
+          const reason = hitIterationCap
+            ? `Hit iteration cap (${MAX_ITERATIONS})`
+            : null
+          await finalizePlan(
+            supabaseForUser,
+            activePlanId,
+            activePlanSteps,
+            finalStatus,
+            reason,
+            enqueue,
+          )
         }
 
         // Final usage event — carries everything the Debug tab needs.
@@ -1295,6 +1636,10 @@ export default async (req: Request, _context: Context) => {
           // AC-04 Session 2: facts retrieved from memory this turn.
           // Debug tab renders these with similarity scores.
           retrievedMemories,
+          // AC-05 Session 1: plan id + final status, for Debug cross-
+          // reference. null when the turn didn't involve a plan.
+          activePlanId,
+          activePlanSteps: activePlanId ? activePlanSteps : [],
         }
         enqueue(usageEvent)
         controller.close()
@@ -1304,6 +1649,21 @@ export default async (req: Request, _context: Context) => {
         const message = err instanceof Error ? err.message : 'Unknown error'
         console.error('[chat] Stream failed:', err)
         enqueue({ type: 'error', error: { status, message } })
+
+        // ─── Critical: finalize any in-flight plan ────────────────
+        // Without this, exceptions leave active_plans rows stuck at
+        // status='running' forever. See finalizePlan's doc comment.
+        if (activePlanId) {
+          await finalizePlan(
+            supabaseForUser,
+            activePlanId,
+            activePlanSteps,
+            'failed',
+            message,
+            enqueue,
+          )
+        }
+
         try {
           controller.close()
         } catch {

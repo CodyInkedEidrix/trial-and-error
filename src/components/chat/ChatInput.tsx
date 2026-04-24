@@ -23,8 +23,13 @@ import { useEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, ReactNode } from 'react'
 
 import { useChatStore } from '../../lib/chatStore'
+import { usePlanStore } from '../../lib/planStore'
 
-const MAX_HEIGHT_PX = 160
+// Raised from 160 → 280 so pasting long multi-line prompts (the kind
+// Cody keeps retyping because they're 8-15 lines of proposal detail)
+// actually fits without feeling truncated. Anything beyond this still
+// scrolls internally.
+const MAX_HEIGHT_PX = 280
 
 // ─── Icon button primitive (scoped to this file) ─────────────────────
 
@@ -134,6 +139,11 @@ function SendIcon() {
 export default function ChatInput() {
   const isStreaming = useChatStore((s) => s.isStreaming)
   const sendUserMessage = useChatStore((s) => s.sendUserMessage)
+  // While a plan is running, render a quiet inline hint above the
+  // textarea so the user knows why the input is locked.
+  const planRunning = usePlanStore(
+    (s) => s.activePlan?.status === 'running',
+  )
 
   const [value, setValue] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -189,6 +199,11 @@ export default function ChatInput() {
 
   return (
     <div className="flex-shrink-0 border-t border-obsidian-800 px-3 py-2.5">
+      {planRunning && (
+        <p className="mb-1.5 px-1 font-mono text-[10px] uppercase tracking-[0.22em] text-text-tertiary">
+          <span className="text-ember-500">●</span> Eidrix is working — wait or tap Stop above
+        </p>
+      )}
       <div className="bg-obsidian-800 rounded-lg px-2.5 py-2 border border-transparent focus-within:border-ember-700/60 focus-within:shadow-[0_0_0_3px_rgba(255,107,26,0.12)] transition-all">
         {/* Row 1 — textarea fills the width; mic sits inline, bottom-
             aligned so it stays anchored to the last typed line as the
@@ -201,11 +216,24 @@ export default function ChatInput() {
               setValue(e.target.value)
               autoResize()
             }}
+            // Explicit paste handler: the default onChange fires on
+            // paste, but some browsers don't flush the new scrollHeight
+            // until the next frame — leaving the textarea one line tall
+            // even though the pasted value is 10 lines long. Schedule
+            // a second resize after the paste settles so long prompts
+            // actually show their full shape.
+            onPaste={() => {
+              requestAnimationFrame(autoResize)
+            }}
             onKeyDown={handleKeyDown}
-            placeholder={isStreaming ? 'Eidrix is thinking…' : 'Type a message…'}
+            // Eye-as-locus: during streaming, the Eye carries the
+            // "she's working" signal (aura pulse + thinking state).
+            // Keep the input visibly disabled, don't compete with the
+            // Eye via placeholder text.
+            placeholder={isStreaming ? '' : 'Type or paste a message…'}
             disabled={isStreaming}
             rows={1}
-            className="flex-1 bg-transparent resize-none focus:outline-none font-body text-[13px] leading-relaxed text-text-primary placeholder:text-text-tertiary py-1 disabled:cursor-not-allowed"
+            className="flex-1 bg-transparent resize-none focus:outline-none font-body text-[13px] leading-relaxed text-text-primary placeholder:text-text-tertiary py-1 disabled:cursor-not-allowed eidrix-scrollbar"
             style={{ maxHeight: `${MAX_HEIGHT_PX}px` }}
           />
           <div className="flex-shrink-0 pb-0.5">

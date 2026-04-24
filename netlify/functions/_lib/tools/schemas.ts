@@ -502,6 +502,47 @@ const summarizeForCustomer: Anthropic.Tool = {
   },
 }
 
+// ─── Planning tool (AC-05) ───────────────────────────────────────────
+// Signaling tool — does NOT mutate business data. chat.ts intercepts
+// the tool_use block to update active_plans + emit SSE events to the
+// client (so the plan card UI populates live). See netlify/functions/
+// _lib/tools/plan.ts for the executor stub and chat.ts for the
+// lifecycle plumbing.
+
+const emitPlanStep: Anthropic.Tool = {
+  name: 'emitPlanStep',
+  description: [
+    'Emit a single planned step in a complex multi-step operation. Call once per step.',
+    'USE IT when a request is COMPLEX: multiple entities, multiple dependent tool calls, multi-step reasoning, or operations spanning 30+ seconds. Examples: "plan my Thursday", "add 5 customers and create proposals for each", "review all open jobs and flag which need attention".',
+    'DO NOT USE IT for simple requests: single queries ("how many customers?"), single mutations ("add customer X"), direct reads ("what are Alice\'s jobs?"). Plan ceremony for trivial work is noise.',
+    'Convention: EMIT ALL STEPS UPFRONT as status="pending" so the user sees the full plan immediately. Then update each step to "active" when you start it and to "complete" (or "failed") when done. Reuse the same id across status updates for the same step.',
+    'This tool does not mutate business data. It signals plan structure to the client UI — users see a visible plan card emerging from the Eye. The tool always returns a simple ack; trust that the client is seeing your plan.',
+    'Do not emit emitPlanStep more than ~20 times in one request. If the plan naturally has more than 20 steps, either combine steps or re-scope with the user before proceeding.',
+  ].join(' '),
+  input_schema: {
+    type: 'object',
+    properties: {
+      id: {
+        type: 'string',
+        description:
+          'Short stable identifier for this step, e.g. "step-1", "schedule-alice", "draft-proposal". Reuse the same id when updating the step\'s status.',
+      },
+      title: {
+        type: 'string',
+        description:
+          'Human-readable title, 3-8 words, present tense. "Pull Thursday schedule", "Draft time blocks", "Create proposal for Alice".',
+      },
+      status: {
+        type: 'string',
+        enum: ['pending', 'active', 'complete', 'failed'],
+        description:
+          '"pending" when first emitting the plan, "active" when you start the step, "complete" when done, "failed" if the step errored unrecoverably.',
+      },
+    },
+    required: ['id', 'title', 'status'],
+  },
+}
+
 // ─── Aggregate ───────────────────────────────────────────────────────
 
 export const TOOL_SCHEMAS: Anthropic.Tool[] = [
@@ -527,4 +568,6 @@ export const TOOL_SCHEMAS: Anthropic.Tool[] = [
   findProposalsForJob,
   // General
   summarizeForCustomer,
+  // Planning (AC-05) — signaling tool, not a mutation.
+  emitPlanStep,
 ]

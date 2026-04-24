@@ -37,8 +37,10 @@ import { useCustomerStore } from './customerStore'
 import { useJobStore } from './jobStore'
 import { useProposalStore } from './proposalStore'
 import { useMessagesStore } from './messagesStore'
+import { usePlanStore } from './planStore'
 import { snapshotUiContext } from './uiContext'
 import type { UiContext } from '../types/uiContext'
+import type { ActivePlan, PlanStatus, PlanStep } from '../types/activePlan'
 
 /** Called after the agent turn completes (success OR error) with the
  *  set of entity stores the function reports as affected. Targeted
@@ -117,6 +119,18 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     const trimmed = content.trim()
     if (!trimmed) return
     if (get().isStreaming) return // one stream at a time
+
+    // ─── Plan send-gate ─────────────────────────────────────────────
+    // If an agentic plan is running, block this send and bump
+    // stopHintNonce so the UI brings the plan into view: PlanCard
+    // halo-pulses its Stop button, MessageList force-scrolls to the
+    // tail, ChatInput surfaces its "Eidrix is working" hint. The
+    // user is shown why they're blocked, in context.
+    const activePlan = usePlanStore.getState().activePlan
+    if (activePlan && activePlan.status === 'running') {
+      usePlanStore.getState().pulseStopHint()
+      return
+    }
 
     // ─── Set streaming gate FIRST ──────────────────────────────────
     // The mirror subscription (bottom of file) only clobbers
@@ -229,7 +243,15 @@ export const useChatStore = create<ChatStore>((set, get) => ({
           'Content-Type': 'application/json',
           Authorization: `Bearer ${accessToken}`,
         },
-        body: JSON.stringify({ messages: messagesForApi, uiContext }),
+        body: JSON.stringify({
+          messages: messagesForApi,
+          uiContext,
+          // AC-05: chat.ts uses these to link plans to the triggering
+          // user message (audit trail) and to the conversation
+          // (scrollback + rehydration).
+          conversationId: persistedUserMessage.conversationId,
+          userMessageId: persistedUserMessage.id,
+        }),
       })
 
       // Pre-stream error — HTTP status is meaningful here. 429 drives
@@ -293,6 +315,86 @@ export const useChatStore = create<ChatStore>((set, get) => ({
             // Final summary event from the function. Captured for the
             // Debug tab; doesn't affect the streamed message UI.
             usageEvent = event
+          } else if (event.type === 'eidrix_plan_started') {
+            // AC-05: server generated a plan UUID + inserted the
+            // active_plans row. Mirror into planStore so the (Session
+            // 2) plan card UI picks up immediately. The first step
+            // arrives in the companion eidrix_plan_step event right
+            // after this one.
+            const now = new Date().toISOString()
+            const plan: ActivePlan = {
+              id: typeof event.planId === 'string' ? event.planId : '',
+              organizationId: '', // server-scoped; client doesn't need for UI
+              userId: '', // same
+              conversationId: useMessagesStore.getState().messages[0]?.conversationId ?? '',
+              triggeringMessageId:
+                typeof event.triggeringMessageId === 'string'
+                  ? event.triggeringMessageId
+                  : null,
+              status: 'running',
+              steps: event.firstStep ? [event.firstStep as PlanStep] : [],
+              requestedStop: false,
+              completionSummary: null,
+              startedAt:
+                typeof event.startedAt === 'string'
+                  ? event.startedAt
+                  : now,
+              completedAt: null,
+              updatedAt: now,
+            }
+            usePlanStore.getState().setActivePlan(plan)
+          } else if (event.type === 'eidrix_plan_step') {
+            // Full steps array replaces — simpler than merge logic;
+            // server is the source of truth.
+            if (typeof event.planId === 'string' && Array.isArray(event.steps)) {
+              usePlanStore
+                .getState()
+                .updateSteps(event.planId, event.steps as PlanStep[])
+            }
+          } else if (event.type === 'eidrix_plan_complete') {
+            if (typeof event.planId === 'string') {
+              const status =
+                typeof event.status === 'string'
+                  ? (event.status as PlanStatus)
+                  : 'complete'
+              const summary =
+                typeof event.completionSummary === 'string'
+                  ? event.completionSummary
+                  : null
+              usePlanStore.getState().completePlan(event.planId, status, summary)
+            }
+          } else if (event.type === 'eidrix_tool_started') {
+            // Live activity: server says a tool just started executing.
+            // Drives the shimmering "→ Drafting Garage Cleanout" sub-
+            // line under the active plan step. The reliable signal —
+            // real tool calls, not the agent's self-reported step
+            // status (which is inconsistent on Sonnet 4.6).
+            if (typeof event.name === 'string') {
+              usePlanStore.getState().startTool({
+                name: event.name,
+                summary:
+                  typeof event.summary === 'string' && event.summary.length > 0
+                    ? event.summary
+                    : event.name,
+                iteration:
+                  typeof event.iteration === 'number' ? event.iteration : 0,
+              })
+            }
+          } else if (event.type === 'eidrix_tool_finished') {
+            if (typeof event.name === 'string') {
+              usePlanStore.getState().finishTool({
+                name: event.name,
+                summary:
+                  typeof event.summary === 'string' && event.summary.length > 0
+                    ? event.summary
+                    : event.name,
+                success: event.success === true,
+                durationMs:
+                  typeof event.durationMs === 'number' ? event.durationMs : 0,
+                iteration:
+                  typeof event.iteration === 'number' ? event.iteration : 0,
+              })
+            }
           } else if (event.type === 'eidrix_pending_action') {
             // A destructive tool was previewed on the server. Attach
             // the card to the current assistant message so it renders
@@ -559,6 +661,24 @@ interface StreamEvent {
   params?: unknown
   summary?: string
   confirmationToken?: string
+  // ─── AC-05 plan event fields ───────────────────────────────────────
+  planId?: string
+  triggeringMessageId?: string | null
+  firstStep?: unknown
+  startedAt?: string
+  step?: unknown
+  steps?: unknown
+  status?: string
+  completionSummary?: string | null
+  completedAt?: string
+  // ─── AC-05 live tool activity fields ───────────────────────────────
+  // Carried by eidrix_tool_started / eidrix_tool_finished events.
+  // `name` is shared with eidrix_usage's per-tool log, but here it's
+  // a single tool — distinguished by event.type.
+  name?: string
+  iteration?: number
+  durationMs?: number
+  success?: boolean
   // ─── eidrix_usage fields (only present when type === 'eidrix_usage') ──
   model?: AgentModel
   contextMode?: 'off' | 'subset' | 'full'

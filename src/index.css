@@ -118,34 +118,45 @@ body::before {
 }
 
 /* ───────────────────────────────────────────────────────────────
-   Streaming cursor — the small bar that blinks at the end of an
-   in-progress assistant message to signal "still typing."
-   Inherits `currentColor` via bg-current in the span; sizing is
-   ch-based so it tracks the current font. Reduced-motion users
-   get a static half-opacity bar — still visible, not animated.
+   Eidrix shimmer — sweeping ember highlight for live tool activity
+   sub-lines under the active plan step. Reads as "alive, not just
+   text on screen" without being noisy. Implemented via background-
+   clip on text + animating background-position so it's GPU-cheap.
+   Reduced-motion users get a static ember-300 fill — same legibility,
+   no movement.
    ─────────────────────────────────────────────────────────────── */
 
-@keyframes streaming-cursor-blink {
-  50% {
-    opacity: 0;
+@keyframes eidrix-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
   }
 }
 
-.streaming-cursor {
-  display: inline-block;
-  vertical-align: baseline;
-  width: 0.45ch;
-  height: 0.95em;
-  margin-left: 2px;
-  background: currentColor;
-  opacity: 0.75;
-  animation: streaming-cursor-blink 1.1s steps(2, end) infinite;
-  transform: translateY(0.1em);
+.eidrix-shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--ember-300) 0%,
+    var(--ember-300) 35%,
+    rgba(255, 235, 210, 0.95) 50%,
+    var(--ember-300) 65%,
+    var(--ember-300) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: eidrix-shimmer 2.6s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .streaming-cursor {
+  .eidrix-shimmer {
     animation: none;
-    opacity: 0.5;
+    background: none;
+    color: var(--ember-300);
+    -webkit-text-fill-color: var(--ember-300);
   }
 }

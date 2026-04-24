@@ -11,6 +11,7 @@ import * as customers from './customers'
 import * as jobs from './jobs'
 import * as proposals from './proposals'
 import * as general from './general'
+import * as plan from './plan'
 
 export { TOOL_SCHEMAS } from './schemas'
 export type { ToolContext, ToolExecutor, ToolResult } from './types'
@@ -41,6 +42,9 @@ export const TOOL_REGISTRY: Record<string, ToolExecutor> = {
 
   // General
   summarizeForCustomer: general.summarizeForCustomer,
+
+  // Planning (AC-05) — signaling tool, handled specially by chat.ts.
+  emitPlanStep: plan.emitPlanStep,
 }
 
 // ─── Affected-entity map ─────────────────────────────────────────────
@@ -84,4 +88,7 @@ export const TOOL_AFFECTS: Record<string, EntityType | null> = {
 
   // General — read-only
   summarizeForCustomer: null,
+
+  // Planning (AC-05) — signaling, does not mutate entity stores.
+  emitPlanStep: null,
 }

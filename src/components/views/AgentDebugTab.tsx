@@ -409,7 +409,19 @@ function ToolCallRow({ call }: { call: ToolCallEntry }) {
           iter {call.iteration}
         </span>
         <span className="min-w-0">
-          <span className="font-mono text-[12px] text-ember-300">
+          <span
+            className={`font-mono text-[12px] ${
+              call.name === 'emitPlanStep'
+                ? 'text-cobalt-500'
+                : 'text-ember-300'
+            }`}
+            title={
+              call.name === 'emitPlanStep'
+                ? 'Plan-signaling tool — no data mutation, drives the plan card UI'
+                : undefined
+            }
+          >
+            {call.name === 'emitPlanStep' ? '◈ ' : ''}
             {call.name}
           </span>
           <span className="font-mono text-[11px] text-text-tertiary">

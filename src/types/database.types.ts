@@ -34,6 +34,73 @@ export type Database = {
   }
   public: {
     Tables: {
+      active_plans: {
+        Row: {
+          completed_at: string | null
+          completion_summary: string | null
+          conversation_id: string
+          id: string
+          organization_id: string
+          requested_stop: boolean
+          started_at: string
+          status: Database["public"]["Enums"]["plan_status"]
+          steps: Json
+          triggering_message_id: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          completion_summary?: string | null
+          conversation_id: string
+          id?: string
+          organization_id: string
+          requested_stop?: boolean
+          started_at?: string
+          status?: Database["public"]["Enums"]["plan_status"]
+          steps?: Json
+          triggering_message_id?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          completion_summary?: string | null
+          conversation_id?: string
+          id?: string
+          organization_id?: string
+          requested_stop?: boolean
+          started_at?: string
+          status?: Database["public"]["Enums"]["plan_status"]
+          steps?: Json
+          triggering_message_id?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "active_plans_conversation_id_fkey"
+            columns: ["conversation_id"]
+            isOneToOne: false
+            referencedRelation: "conversations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "active_plans_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "active_plans_triggering_message_id_fkey"
+            columns: ["triggering_message_id"]
+            isOneToOne: false
+            referencedRelation: "messages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       agent_settings: {
         Row: {
           context_mode: Database["public"]["Enums"]["context_mode"]
@@ -530,6 +597,7 @@ export type Database = {
         | "cancelled"
       membership_role: "owner" | "admin" | "member"
       message_role: "user" | "assistant"
+      plan_status: "running" | "complete" | "stopped" | "failed"
       proposal_status: "draft" | "sent" | "approved" | "rejected"
     }
     CompositeTypes: {
@@ -678,6 +746,7 @@ export const Constants = {
       ],
       membership_role: ["owner", "admin", "member"],
       message_role: ["user", "assistant"],
+      plan_status: ["running", "complete", "stopped", "failed"],
       proposal_status: ["draft", "sent", "approved", "rejected"],
     },
   },

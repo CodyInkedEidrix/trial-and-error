@@ -484,16 +484,29 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
       ...(historicalRes.data ?? []).map(dbRowToPlan),
     ]
 
-    set({
-      activePlan,
-      historicalPlans: historical,
-      // Rehydrated historical plans have no captured tool log — the
-      // chip will render with steps only. (Real Eidrix can persist
-      // tool events server-side if this matters later.)
-      historicalToolLogs: {},
-      currentBatch: [],
-      toolLog: [],
-      isStopping: false,
+    set((state) => {
+      // Trim historicalToolLogs to only entries whose plan is still in
+      // the rehydrated historicalPlans list. Two goals at once:
+      //   1. Conversation switches drop the prior conversation's logs
+      //      (their plan ids aren't in the new set, so they prune away).
+      //   2. Error-path rehydrates (chatStore's catch triggers
+      //      /chat-stop force mode → rehydrate) preserve the just-
+      //      captured log for the plan that's now sitting in
+      //      historicalPlans — so the chip's "tools used" expansion
+      //      still has content right after a stream crash.
+      const keepPlanIds = new Set(historical.map((p) => p.id))
+      const nextToolLogs: Record<string, ToolLogEntry[]> = {}
+      for (const [planId, log] of Object.entries(state.historicalToolLogs)) {
+        if (keepPlanIds.has(planId)) nextToolLogs[planId] = log
+      }
+      return {
+        activePlan,
+        historicalPlans: historical,
+        historicalToolLogs: nextToolLogs,
+        currentBatch: [],
+        toolLog: [],
+        isStopping: false,
+      }
     })
   },
 

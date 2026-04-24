@@ -228,7 +228,7 @@ function StepRow({
           {step.title}
         </span>
       </div>
-      {tools.length > 0 && (
+      {tools.length > 0 ? (
         <ul className="ml-7 mt-0.5 space-y-0.5">
           <AnimatePresence initial={false}>
             {tools.map((tool) => (
@@ -251,7 +251,19 @@ function StepRow({
             ))}
           </AnimatePresence>
         </ul>
-      )}
+      ) : step.status === 'active' ? (
+        // "Preparing…" placeholder: between "step marked active" and
+        // "first tool fires," currentBatch is empty. Without this, the
+        // active step looks inert even though the agent is mid-turn.
+        // Renders until a real tool_started event lands, which replaces
+        // the placeholder with the live batch above.
+        <div className="ml-7 mt-0.5 flex items-center gap-1.5 font-mono text-[11px] leading-snug">
+          <span aria-hidden className="text-ember-500/70">
+            →
+          </span>
+          <span className="eidrix-shimmer">preparing…</span>
+        </div>
+      ) : null}
     </motion.li>
   )
 }

@@ -559,6 +559,27 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         currentReaction: 'uncertainty',
       })
 
+      // Clean up any active plan. The server's catch block normally
+      // fires eidrix_plan_complete{status:'failed'} before closing the
+      // controller, but a hard stream drop (Netlify timeout, network
+      // blip) can kill the connection before that event lands. Without
+      // this local cleanup, the UI would show a plan as "running"
+      // forever until the 10-min rehydrate auto-expire. We also fire
+      // /chat-stop so the DB row reflects reality — call it FIRST
+      // (captures the plan id synchronously, runs fetch in the
+      // background), then mark locally complete.
+      const stalePlan = usePlanStore.getState().activePlan
+      if (stalePlan && stalePlan.status === 'running') {
+        void usePlanStore.getState().requestStop()
+        usePlanStore
+          .getState()
+          .completePlan(
+            stalePlan.id,
+            'failed',
+            'Connection lost mid-plan.',
+          )
+      }
+
       // Push a debug entry for the error too — the Debug tab is most
       // useful when something went wrong, so don't drop these.
       useDebugStore.getState().pushEntry(

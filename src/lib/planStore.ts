@@ -221,13 +221,29 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
   updateSteps: (planId, steps) => {
     const current = get().activePlan
     if (!current || current.id !== planId) return
-    set({
+    // If any step just transitioned to 'complete', clear the current
+    // tool batch. Those tools belonged to the step that just finished
+    // — keeping them visible under whatever step becomes active next
+    // is a known visibility bug (user sees "Adding Luke Skywalker"
+    // under a "Create all proposals" step, which is wrong and
+    // confusing). The "preparing…" placeholder in PlanCard takes
+    // over until the new active step's real tools start firing.
+    const prevCompleteCount = current.steps.filter(
+      (s) => s.status === 'complete',
+    ).length
+    const nextCompleteCount = steps.filter(
+      (s) => s.status === 'complete',
+    ).length
+    const stepJustCompleted = nextCompleteCount > prevCompleteCount
+
+    set((state) => ({
       activePlan: {
         ...current,
         steps,
         updatedAt: new Date().toISOString(),
       },
-    })
+      currentBatch: stepJustCompleted ? [] : state.currentBatch,
+    }))
   },
 
   completePlan: (planId, status, completionSummary) => {

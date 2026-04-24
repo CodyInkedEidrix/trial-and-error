@@ -29,6 +29,15 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
   const reducedMotion = useReducedMotion() ?? false
   const isUser = message.role === 'user'
 
+  // Eye-as-locus rule: no empty assistant shell. When a streaming
+  // message hasn't received its first token yet, don't render anything —
+  // the "she's working" signal lives entirely at the Eye (aura pulse +
+  // thinking state). The bubble mounts fresh the moment real content
+  // arrives and animates in via AnimatePresence.
+  if (message.status === 'streaming' && !message.content.trim()) {
+    return null
+  }
+
   const enterMotion = reducedMotion
     ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
     : {
@@ -52,12 +61,6 @@ export default function MessageBubble({ message }: MessageBubbleProps) {
           }`}
         >
           {message.content}
-          {/* Streaming cursor — inline blinking bar that signals Claude
-              is still typing. Rendered as part of the same <p> so it
-              hugs the last character, not as a separate block. */}
-          {message.status === 'streaming' && (
-            <span className="streaming-cursor" aria-hidden />
-          )}
         </p>
         <p
           className="font-mono text-[10px] text-text-tertiary mt-1 opacity-0 group-hover:opacity-100 transition-opacity"

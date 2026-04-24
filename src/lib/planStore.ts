@@ -41,20 +41,26 @@ type DbActivePlanRow = Database['public']['Tables']['active_plans']['Row']
 
 const STALE_PLAN_THRESHOLD_MS = 10 * 60 * 1000 // 10 minutes
 
-/** The single "most recently started" tool for the current plan run.
- *  Sticky: overwritten by each subsequent startTool, never cleared by
- *  finishTool. Clears only on new plan start, plan end, sign-out, or
- *  conversation change.
+/** A tool call displayed as a live shimmer sub-line under active plan
+ *  steps. Multiple may coexist in currentBatch when the agent batches
+ *  parallel calls in one iteration (via Promise.all in chat.ts).
  *
- *  Known compromise: when multiple plan steps are simultaneously
- *  active (the agent marked several active before firing any tool),
- *  the same summary shimmers under each. We trade per-step precision
- *  for reliable visibility — matcher-based routing produced invisible
- *  or stale activity in practice.
+ *  The batch is sticky WITHIN an iteration (entries accumulate as
+ *  tool_started events arrive) and CLEARS when the iteration number
+ *  changes (new batch begins). Between iterations — when the loop is
+ *  streaming text back to the client before the next tool_use turn —
+ *  the last batch stays visible so activity doesn't vanish in the gap.
+ *
+ *  Why not pin-each-tool-to-a-specific-step: earlier routing attempts
+ *  via textual matching kept producing invisible or wrong-step
+ *  artifacts. Iteration-scoped batches trade per-step precision for
+ *  reliable parallel visibility — when multiple steps are active
+ *  simultaneously, the same batch shows under each, but nothing gets
+ *  routed to the wrong step.
  *
  *  callKey is assigned client-side at startTool time so the PlanCard
- *  sub-line can use it as the React key when the slot content changes,
- *  avoiding a flicker as tools rapidly succeed each other. */
+ *  sub-line can use it as the React key, keeping AnimatePresence
+ *  entries stable across rapid-fire starts. */
 export interface CurrentTool {
   callKey: string
   name: string
@@ -94,14 +100,18 @@ export interface PlanStore {
    *  handles that gracefully. */
   historicalToolLogs: Record<string, ToolLogEntry[]>
 
-  /** The most recently started tool for the current plan run (v1
-   *  behavior — see CurrentTool doc comment). Null when no tool has
-   *  fired yet in the current plan, or when the plan has ended. */
-  currentTool: CurrentTool | null
+  /** Tools firing in the currently-running iteration. Entries append
+   *  on startTool; the whole array clears the moment a new tool starts
+   *  in a different iteration (see startTool for the reset logic).
+   *  Between iterations, the last iteration's batch stays visible so
+   *  activity doesn't flicker off while Claude streams text before
+   *  the next tool_use turn. Empty when no tool has fired yet in the
+   *  current plan, or when the plan has ended. */
+  currentBatch: CurrentTool[]
 
   /** Tool log for the IN-FLIGHT plan. Snapshotted to
    *  historicalToolLogs[planId] when the plan completes. Reset to []
-   *  when a new plan starts. Unlike currentTool, this accumulates
+   *  when a new plan starts. Unlike currentBatch, this accumulates
    *  ALL tools with timings + success/failure so the HistoricalPlanChip
    *  can render the full execution receipt on expansion. */
   toolLog: ToolLogEntry[]
@@ -193,7 +203,7 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
   activePlan: null,
   historicalPlans: [],
   historicalToolLogs: {},
-  currentTool: null,
+  currentBatch: [],
   toolLog: [],
   isStopping: false,
   stopHintNonce: 0,
@@ -202,7 +212,7 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
     // New plan starting — fresh tool log, no current tool yet.
     set({
       activePlan: plan,
-      currentTool: null,
+      currentBatch: [],
       toolLog: [],
       isStopping: false,
     })
@@ -211,13 +221,29 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
   updateSteps: (planId, steps) => {
     const current = get().activePlan
     if (!current || current.id !== planId) return
-    set({
+    // If any step just transitioned to 'complete', clear the current
+    // tool batch. Those tools belonged to the step that just finished
+    // — keeping them visible under whatever step becomes active next
+    // is a known visibility bug (user sees "Adding Luke Skywalker"
+    // under a "Create all proposals" step, which is wrong and
+    // confusing). The "preparing…" placeholder in PlanCard takes
+    // over until the new active step's real tools start firing.
+    const prevCompleteCount = current.steps.filter(
+      (s) => s.status === 'complete',
+    ).length
+    const nextCompleteCount = steps.filter(
+      (s) => s.status === 'complete',
+    ).length
+    const stepJustCompleted = nextCompleteCount > prevCompleteCount
+
+    set((state) => ({
       activePlan: {
         ...current,
         steps,
         updatedAt: new Date().toISOString(),
       },
-    })
+      currentBatch: stepJustCompleted ? [] : state.currentBatch,
+    }))
   },
 
   completePlan: (planId, status, completionSummary) => {
@@ -234,7 +260,7 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
     const finalizedToolLog = get().toolLog
     set((state) => ({
       activePlan: null,
-      currentTool: null,
+      currentBatch: [],
       toolLog: [],
       isStopping: false,
       // Snapshot the in-flight tool log into the historical map so
@@ -257,34 +283,49 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
     const callKey = `${name}-${iteration}-${startedAt}-${Math.random()
       .toString(36)
       .slice(2, 6)}`
-    set((state) => ({
-      // The single currentTool slot is REPLACED on each startTool.
-      // Whatever was last set is what the UI shimmers.
-      currentTool: { callKey, name, summary, iteration, startedAt },
-      // toolLog accumulates every call — used by the HistoricalPlanChip's
-      // expanded tools-used list.
-      toolLog: [
-        ...state.toolLog,
-        {
-          name,
-          summary,
-          iteration,
-          startedAt,
-          finishedAt: null,
-          durationMs: null,
-          success: null,
-        },
-      ],
-    }))
+    const entry: CurrentTool = {
+      callKey,
+      name,
+      summary,
+      iteration,
+      startedAt,
+    }
+    set((state) => {
+      // If this tool belongs to a new iteration, start a fresh batch.
+      // The previous iteration's entries fall away — they were
+      // sticky while the loop was between turns, but the agent has
+      // moved on to new work now.
+      const prev = state.currentBatch
+      const sameIteration =
+        prev.length > 0 && prev[0].iteration === iteration
+      const nextBatch = sameIteration ? [...prev, entry] : [entry]
+      return {
+        currentBatch: nextBatch,
+        // toolLog accumulates every call — used by the
+        // HistoricalPlanChip's expanded tools-used list.
+        toolLog: [
+          ...state.toolLog,
+          {
+            name,
+            summary,
+            iteration,
+            startedAt,
+            finishedAt: null,
+            durationMs: null,
+            success: null,
+          },
+        ],
+      }
+    })
   },
 
   finishTool: ({ name, success, durationMs, iteration }) => {
     const finishedAt = new Date().toISOString()
     set((state) => {
-      // Intentionally does NOT clear currentTool. The slot stays
-      // sticky until the next startTool replaces it or the plan ends —
-      // that's what keeps tool activity visible between iterations
-      // when tool calls complete in <30ms.
+      // Intentionally does NOT remove the entry from currentBatch.
+      // The batch stays sticky until the NEXT iteration's startTool
+      // replaces it — that's what keeps tool activity visible
+      // between iterations when tool calls complete in <30ms.
       //
       // Still update the toolLog so the HistoricalPlanChip gets
       // accurate timings + success/failure for its receipt view. Walk
@@ -374,7 +415,7 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
         activePlan: null,
         historicalPlans: [],
         historicalToolLogs: {},
-        currentTool: null,
+        currentBatch: [],
         toolLog: [],
       })
       return
@@ -459,16 +500,29 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
       ...(historicalRes.data ?? []).map(dbRowToPlan),
     ]
 
-    set({
-      activePlan,
-      historicalPlans: historical,
-      // Rehydrated historical plans have no captured tool log — the
-      // chip will render with steps only. (Real Eidrix can persist
-      // tool events server-side if this matters later.)
-      historicalToolLogs: {},
-      currentTool: null,
-      toolLog: [],
-      isStopping: false,
+    set((state) => {
+      // Trim historicalToolLogs to only entries whose plan is still in
+      // the rehydrated historicalPlans list. Two goals at once:
+      //   1. Conversation switches drop the prior conversation's logs
+      //      (their plan ids aren't in the new set, so they prune away).
+      //   2. Error-path rehydrates (chatStore's catch triggers
+      //      /chat-stop force mode → rehydrate) preserve the just-
+      //      captured log for the plan that's now sitting in
+      //      historicalPlans — so the chip's "tools used" expansion
+      //      still has content right after a stream crash.
+      const keepPlanIds = new Set(historical.map((p) => p.id))
+      const nextToolLogs: Record<string, ToolLogEntry[]> = {}
+      for (const [planId, log] of Object.entries(state.historicalToolLogs)) {
+        if (keepPlanIds.has(planId)) nextToolLogs[planId] = log
+      }
+      return {
+        activePlan,
+        historicalPlans: historical,
+        historicalToolLogs: nextToolLogs,
+        currentBatch: [],
+        toolLog: [],
+        isStopping: false,
+      }
     })
   },
 
@@ -477,7 +531,7 @@ export const usePlanStore = create<PlanStore>((set, get) => ({
       activePlan: null,
       historicalPlans: [],
       historicalToolLogs: {},
-      currentTool: null,
+      currentBatch: [],
       toolLog: [],
       isStopping: false,
     })

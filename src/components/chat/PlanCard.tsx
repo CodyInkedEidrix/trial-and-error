@@ -8,19 +8,19 @@
 // gutter, and step titles in body text.
 //
 // ─── Tool activity display ────────────────────────────────────────────
-// One sticky slot: planStore.currentTool. Every tool_started event
-// overwrites it; tool_finished doesn't clear it. The most recently-
-// started tool shimmers under every active step in the plan. When
-// tools fire in rapid succession, you see a shimmering feed of
-// summaries rotating. Between iterations, the last tool stays visible
-// because nothing cleared it — this is what makes the activity
-// watchable when tool calls complete in <30ms.
+// planStore.currentBatch holds every tool call from the currently-
+// running iteration. When the agent batches parallel tools via
+// Promise.all (4 addCustomer calls in one turn), you see all 4
+// stacked as shimmering sub-lines. When the iteration advances, the
+// batch clears and the next iteration's tools appear. Between
+// iterations, the last batch stays visible so activity doesn't blink
+// off while Claude streams text.
 //
-// Known compromise: when the agent simultaneously activates multiple
-// steps (e.g., three "Add X" steps at once), the same summary
-// replicates under each. Visibility wins over per-step precision —
-// matcher-based routing produced invisible or stale activity in
-// practice.
+// Each sub-line in the batch renders under every active plan step
+// (the agent typically marks one step active at a time; if multiple
+// are simultaneously active, all entries show under each — trading
+// per-step precision for reliable visibility, since matcher-based
+// routing kept producing invisible or stale activity in practice).
 //
 // The Stop button halo-pulses when planStore.stopHintNonce increments
 // (the user tried to send during the plan — in-context feedback that
@@ -28,7 +28,7 @@
 // ──────────────────────────────────────────────────────────────────────
 
 import { useEffect, useState } from 'react'
-import { motion, useReducedMotion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import type {
   ActivePlan,
@@ -46,7 +46,7 @@ interface PlanCardProps {
 
 export default function PlanCard({ plan, isStopping, onStop }: PlanCardProps) {
   const reducedMotion = useReducedMotion() ?? false
-  const currentTool = usePlanStore((s) => s.currentTool)
+  const currentBatch = usePlanStore((s) => s.currentBatch)
   const stopHintNonce = usePlanStore((s) => s.stopHintNonce)
 
   const stepCountLabel =
@@ -110,9 +110,7 @@ export default function PlanCard({ plan, isStopping, onStop }: PlanCardProps) {
             step={step}
             index={i}
             reducedMotion={reducedMotion}
-            currentTool={
-              step.status === 'active' ? currentTool : null
-            }
+            tools={step.status === 'active' ? currentBatch : []}
           />
         ))}
       </ul>
@@ -169,19 +167,19 @@ function StopButton({
 }
 
 // ─── Step row ────────────────────────────────────────────────────────
-// Each row gets its step glyph + title, plus (when active AND a
-// currentTool exists in the store) a shimmering sub-line showing what
-// the agent most recently started doing. When multiple steps are
-// simultaneously active, each renders the same sub-line.
+// Each row gets its step glyph + title, plus (when active AND at least
+// one tool is in the current iteration's batch) one shimmering sub-
+// line per tool. Multiple sub-lines stack — the agent's parallel tool
+// calls become simultaneous visible activity.
 
 interface StepRowProps {
   step: PlanStep
   index: number
   reducedMotion: boolean
-  /** The store's currentTool, passed through only when this step is
-   *  active. Null for non-active steps so they don't render a
-   *  sub-line. */
-  currentTool: CurrentTool | null
+  /** The store's currentBatch, passed through only when this step is
+   *  active. Empty array for non-active steps so they render no
+   *  sub-lines. */
+  tools: CurrentTool[]
 }
 
 function stepTitleClass(status: PlanStepStatus): string {
@@ -201,7 +199,7 @@ function StepRow({
   step,
   index,
   reducedMotion,
-  currentTool,
+  tools,
 }: StepRowProps) {
   const enterMotion = reducedMotion
     ? { initial: { opacity: 0 }, animate: { opacity: 1 } }
@@ -230,23 +228,53 @@ function StepRow({
           {step.title}
         </span>
       </div>
-      {currentTool && (
-        <ToolSubline tool={currentTool} />
-      )}
+      {tools.length > 0 ? (
+        <ul className="ml-7 mt-0.5 space-y-0.5">
+          <AnimatePresence initial={false}>
+            {tools.map((tool) => (
+              <motion.li
+                key={tool.callKey}
+                initial={
+                  reducedMotion ? { opacity: 0 } : { opacity: 0, x: -4 }
+                }
+                animate={{ opacity: 1, x: 0 }}
+                exit={
+                  reducedMotion ? { opacity: 0 } : { opacity: 0, x: -4 }
+                }
+                transition={{
+                  duration: reducedMotion ? 0.15 : 0.22,
+                  ease: [0.22, 0.61, 0.36, 1],
+                }}
+              >
+                <ToolSubline tool={tool} />
+              </motion.li>
+            ))}
+          </AnimatePresence>
+        </ul>
+      ) : step.status === 'active' ? (
+        // "Preparing…" placeholder: between "step marked active" and
+        // "first tool fires," currentBatch is empty. Without this, the
+        // active step looks inert even though the agent is mid-turn.
+        // Renders until a real tool_started event lands, which replaces
+        // the placeholder with the live batch above.
+        <div className="ml-7 mt-0.5 flex items-center gap-1.5 font-mono text-[11px] leading-snug">
+          <span aria-hidden className="text-ember-500/70">
+            →
+          </span>
+          <span className="eidrix-shimmer">preparing…</span>
+        </div>
+      ) : null}
     </motion.li>
   )
 }
 
 // ─── Tool sub-line ───────────────────────────────────────────────────
-// The shimmering "→ {summary}" line. Keyed on callKey so when the
-// currentTool slot is replaced by a new start, React cross-fades the
-// new summary in cleanly instead of mutating characters in place.
+// The shimmering "→ {summary}" line. Positioned by its parent <li>;
+// this component just renders content. AnimatePresence in the parent
+// handles entry/exit as entries come and go from the batch.
 function ToolSubline({ tool }: { tool: CurrentTool }) {
   return (
-    <div
-      key={tool.callKey}
-      className="ml-7 mt-0.5 flex items-center gap-1.5 font-mono text-[11px] leading-snug"
-    >
+    <div className="flex items-center gap-1.5 font-mono text-[11px] leading-snug">
       <span aria-hidden className="text-ember-500/70">
         →
       </span>

@@ -1,30 +1,31 @@
 // ──────────────────────────────────────────────────────────────────────
-// chat-stop — terminate a running agentic plan (AC-05 Session 1).
+// chat-stop — terminate a running agentic plan.
 //
-// Two outcomes per call, both atomic in one Supabase UPDATE:
+// Always force-terminates: one Supabase UPDATE that sets both
+// requested_stop=true AND status='stopped' on the active_plans row.
+// Two reasons for "always force":
 //
-//   1. requested_stop = true   — signal for any LIVE chat.ts function
-//      polling this row. It picks up the flag at its next iteration
-//      boundary, injects a "wrap up" synthetic user message, Claude
-//      produces a summary, and the loop exits via the existing
-//      finalizePlan helper with status='stopped'.
+//   1. A LIVE chat.ts function polls requested_stop at each iteration
+//      boundary. It'll see the flag, inject a [SYSTEM] STOP message,
+//      Claude produces a summary, and the loop exits via finalizePlan
+//      with status='stopped' — overwriting our force-set status with
+//      the same value. No-op, and the completion_summary gets filled
+//      in properly along the way.
 //
-//   2. status = 'stopped' (only when the row is older than the live
-//      window — see STALE_THRESHOLD_MS below). Covers the dead-stream
-//      case where chat.ts crashed without finalizing: the user pressing
-//      Stop directly cleans up the zombie row, no waiting on a function
-//      that will never poll again.
+//   2. A DEAD chat.ts function (timeout, crash, dropped stream) isn't
+//      around to poll anything. Force-setting status='stopped' directly
+//      is the only way to clean up the row. The client's /chat-stop
+//      call will succeed, the user's UI unblocks, rehydrate on next
+//      load sees a clean terminal row.
 //
-// Why the threshold: if we always set status=stopped immediately, a
-// race becomes possible where the live chat.ts function is mid-flight,
-// sees status changed under it, and finalizePlan re-overwrites with
-// status. Better to let the running loop self-terminate (clean exit
-// with completion summary + eidrix_plan_complete event) when it can,
-// and only force-stop when no loop appears to be running.
+// Previous two-mode design (signal if < 30s old, force if older)
+// couldn't reliably detect which case was active — the function may
+// have been alive 100ms ago and crashed between now and the next poll.
+// Always-force collapses both cases into one correct behavior.
 //
 // Safety constraints:
 //   - User's JWT required; RLS ensures own-plans-only
-//   - Only running plans are touched (terminal rows are no-ops)
+//   - Only plans with status='running' are touched (no-op on terminal)
 // ──────────────────────────────────────────────────────────────────────
 
 import type { Context } from '@netlify/functions'
@@ -84,89 +85,38 @@ export default async (req: Request, _context: Context) => {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  // Read the row first to see how stale it is. If the row is older than
-  // STALE_THRESHOLD_MS the chat.ts function that started it is almost
-  // certainly dead (Netlify max function lifetime is well under this
-  // threshold). In that case we force status=stopped directly — no
-  // waiting for a polling loop that no longer exists.
-  const { data: planRow, error: fetchErr } = await supabase
-    .from('active_plans')
-    .select('id, status, started_at')
-    .eq('id', body.planId)
-    .maybeSingle()
-  if (fetchErr) {
-    console.error('[chat-stop] fetch failed:', fetchErr.message)
-    return jsonResponse({ error: fetchErr.message }, 500)
-  }
-  if (!planRow) {
-    return jsonResponse(
-      { ok: true, stopSignalSent: false, planId: body.planId, reason: 'not-found' },
-      200,
-    )
-  }
-  if (planRow.status !== 'running') {
-    // Already terminal — nothing to do.
-    return jsonResponse(
-      { ok: true, stopSignalSent: false, planId: body.planId, reason: 'already-terminal' },
-      200,
-    )
-  }
-
-  const STALE_THRESHOLD_MS = 30_000
-  const ageMs =
-    Date.now() - new Date(planRow.started_at as string).getTime()
-  const isLikelyDead = ageMs > STALE_THRESHOLD_MS
-
-  // ─── Live path: set requested_stop, let chat.ts finalize cleanly ──
-  // chat.ts polls between iterations. Within a few seconds it picks up
-  // the flag, asks Claude for a wrap-up summary, then runs finalizePlan
-  // which emits the SSE event the client uses to clear activePlan.
-  if (!isLikelyDead) {
-    const { error } = await supabase
-      .from('active_plans')
-      .update({ requested_stop: true })
-      .eq('id', body.planId)
-      .eq('status', 'running')
-    if (error) {
-      console.error('[chat-stop] flag update failed:', error.message)
-      return jsonResponse({ error: error.message }, 500)
-    }
-    return jsonResponse(
-      {
-        ok: true,
-        stopSignalSent: true,
-        planId: body.planId,
-        mode: 'signal',
-      },
-      200,
-    )
-  }
-
-  // ─── Dead-stream path: force-stop directly ───────────────────────
-  // No live function to poll the flag. Mark the row terminal so the
-  // client can rehydrate cleanly and the user is unblocked.
+  // Single UPDATE, scoped to status='running' so a stale client click
+  // can't overwrite a terminal row. If the row is already terminal
+  // (rare race), the UPDATE returns zero rows and we report no-op.
   const completedAt = new Date().toISOString()
-  const { error: forceErr } = await supabase
+  const { data, error } = await supabase
     .from('active_plans')
     .update({
       requested_stop: true,
       status: 'stopped',
       completion_summary:
-        'Stop pressed on a stale plan — the originating request is no longer running.',
+        'Stopped at user request.',
       completed_at: completedAt,
     })
     .eq('id', body.planId)
     .eq('status', 'running')
-  if (forceErr) {
-    console.error('[chat-stop] force-stop failed:', forceErr.message)
-    return jsonResponse({ error: forceErr.message }, 500)
+    .select('id')
+
+  if (error) {
+    console.error('[chat-stop] update failed:', error.message)
+    return jsonResponse({ error: error.message }, 500)
   }
+
+  const terminated = (data ?? []).length > 0
   return jsonResponse(
     {
       ok: true,
-      stopSignalSent: true,
+      stopSignalSent: terminated,
       planId: body.planId,
+      // 'force' kept in the response for client back-compat; the
+      // client's requestStop rehydrates when it sees 'force'.
       mode: 'force',
+      reason: terminated ? 'terminated' : 'already-terminal',
     },
     200,
   )

@@ -23,6 +23,7 @@ import {
   type ToolCallEntry,
 } from '../../lib/debugStore'
 import { MODEL_META, type ContextMode } from '../../types/agentSettings'
+import type { PlanStep, PlanStepStatus } from '../../types/activePlan'
 
 /** Pill colors for the context-mode badge. Off is muted, subset is
  *  cool/cobalt (the production default), full is hot/ember (heavier
@@ -239,9 +240,26 @@ function DebugEntryRow({ entry }: { entry: DebugEntry }) {
             </DetailSection>
           )}
 
+          {/* Plan trace (AC-05) — nested view of the agentic plan for
+              this turn. Renders steps with their final status + tool
+              calls grouped by iteration. Only shown when the turn ran
+              a plan; simple single-tool turns fall through to the
+              flat Tool trace section below. */}
+          {entry.activePlanId && entry.activePlanSteps.length > 0 && (
+            <DetailSection
+              title={`Plan trace — ${entry.activePlanSteps.length} step${entry.activePlanSteps.length === 1 ? '' : 's'} · ${entry.toolCalls.length} tool call${entry.toolCalls.length === 1 ? '' : 's'} across ${entry.iterations} iteration${entry.iterations === 1 ? '' : 's'}`}
+            >
+              <PlanTrace
+                steps={entry.activePlanSteps}
+                toolCalls={entry.toolCalls}
+              />
+            </DetailSection>
+          )}
+
           {/* Tool trace (AC-03 S2) — the full loop of tool calls made
-              during this request, with timings and results. Only
-              rendered when tool calls happened. */}
+              during this request, with timings and results. Rendered
+              for non-plan turns OR as the flat fallback even when a
+              plan ran (raw data is still useful). */}
           {entry.toolCalls.length > 0 && (
             <DetailSection
               title={`Tool trace (${entry.toolCalls.length} call${entry.toolCalls.length === 1 ? '' : 's'} · ${entry.iterations} iteration${entry.iterations === 1 ? '' : 's'}${entry.affectedEntities.length > 0 ? ` · affected: ${entry.affectedEntities.join(', ')}` : ' · read-only'})`}
@@ -368,6 +386,18 @@ function truncate(s: string, max = 140): string {
   return s.slice(0, max) + '…'
 }
 
+/** Text color for a tool-call row's result tag. Three states: failed
+ *  (danger), succeeded-but-a-preview/awaiting-confirmation (dimmed
+ *  ember), succeeded-and-committed (success green). */
+function toolCallResultClass(
+  succeeded: boolean,
+  isPreview: boolean,
+): string {
+  if (!succeeded) return 'text-danger-500'
+  if (isPreview) return 'text-ember-300/80'
+  return 'text-success-500'
+}
+
 function ToolCallRow({ call }: { call: ToolCallEntry }) {
   const [open, setOpen] = useState(false)
   const result = call.result as
@@ -428,13 +458,7 @@ function ToolCallRow({ call }: { call: ToolCallEntry }) {
             {argSummary}
           </span>
           <span
-            className={`ml-2 font-mono text-[11px] ${
-              succeeded
-                ? isPreview
-                  ? 'text-ember-300/80'
-                  : 'text-success-500'
-                : 'text-danger-500'
-            }`}
+            className={`ml-2 font-mono text-[11px] ${toolCallResultClass(succeeded, isPreview)}`}
           >
             {resultTag}
           </span>
@@ -561,6 +585,155 @@ function MemoryTrace({
           </div>
         )
       })}
+    </div>
+  )
+}
+
+// ─── Plan trace (AC-05) ──────────────────────────────────────────────
+// Nested view of an agentic plan: step list with final statuses, plus
+// the actual tool calls grouped by iteration. "Grouped by iteration"
+// not "grouped by step" because we don't have a server-side tool→step
+// linkage — the agent could fire N tools in one iteration spanning
+// M steps. Iteration-grouping is the honest presentation.
+//
+// emitPlanStep calls are filtered out of the tool group view (they're
+// already represented by the step list up top); only "real work" tools
+// surface as per-iteration items.
+
+function planStepStatusStyle(status: PlanStepStatus): {
+  glyph: string
+  className: string
+} {
+  switch (status) {
+    case 'complete':
+      return { glyph: '✓', className: 'text-ember-500' }
+    case 'active':
+      return { glyph: '◉', className: 'text-ember-500' }
+    case 'failed':
+      return { glyph: '✗', className: 'text-danger-500' }
+    case 'pending':
+      return { glyph: '○', className: 'text-text-tertiary' }
+  }
+}
+
+/** Title text color for a plan step in the historical trace. */
+function planTraceStepTitleClass(status: PlanStepStatus): string {
+  switch (status) {
+    case 'complete':
+      return 'text-text-tertiary'
+    case 'failed':
+      return 'text-danger-500/90'
+    case 'active':
+    case 'pending':
+      return 'text-text-primary'
+  }
+}
+
+function PlanTrace({
+  steps,
+  toolCalls,
+}: {
+  steps: PlanStep[]
+  toolCalls: ToolCallEntry[]
+}) {
+  // Group non-signaling tool calls by iteration for the "what the
+  // agent actually did per turn" view. emitPlanStep fires communicate
+  // plan structure and show up in the step list; hiding them here
+  // keeps the per-iteration view focused on real work.
+  const byIteration = new Map<number, ToolCallEntry[]>()
+  for (const call of toolCalls) {
+    if (call.name === 'emitPlanStep') continue
+    const list = byIteration.get(call.iteration) ?? []
+    list.push(call)
+    byIteration.set(call.iteration, list)
+  }
+  const iterations = [...byIteration.keys()].sort((a, b) => a - b)
+
+  return (
+    <div className="space-y-4">
+      {/* Step list — the plan's structure with final statuses. */}
+      <div>
+        <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-tertiary mb-2">
+          Steps
+        </p>
+        <ol className="space-y-1.5">
+          {steps.map((step, i) => {
+            const { glyph, className } = planStepStatusStyle(step.status)
+            return (
+              <li
+                key={step.id}
+                className="flex items-start gap-2.5 font-mono text-[12px]"
+              >
+                <span className="text-text-tertiary/60 tabular-nums w-5 text-right flex-shrink-0">
+                  {i + 1}.
+                </span>
+                <span className={`${className} flex-shrink-0 w-3 text-center`}>
+                  {glyph}
+                </span>
+                <span className={planTraceStepTitleClass(step.status)}>
+                  {step.title}
+                </span>
+              </li>
+            )
+          })}
+        </ol>
+      </div>
+
+      {/* Tools per iteration — the actual work. */}
+      {iterations.length > 0 && (
+        <div>
+          <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-text-tertiary mb-2">
+            Tool calls by iteration
+          </p>
+          <div className="space-y-3">
+            {iterations.map((iter) => {
+              const calls = byIteration.get(iter) ?? []
+              const totalMs = calls.reduce((s, c) => s + c.durationMs, 0)
+              return (
+                <div key={iter} className="space-y-1.5">
+                  <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-ember-500/80">
+                    Iter {iter} · {calls.length} call
+                    {calls.length === 1 ? '' : 's'} · {formatMs(totalMs)}
+                  </p>
+                  <div className="space-y-1.5 pl-3 border-l border-ember-700/25">
+                    {calls.map((call, i) => (
+                      <PlanTraceToolLine key={i} call={call} />
+                    ))}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// Compact single-line tool render inside PlanTrace — the verbose
+// input/result expansion stays in the flat Tool trace below.
+function PlanTraceToolLine({ call }: { call: ToolCallEntry }) {
+  const result = call.result as
+    | { success?: boolean; error?: string }
+    | null
+  const succeeded = result?.success === true
+  return (
+    <div className="flex items-start gap-2 font-mono text-[11px] leading-snug">
+      <span
+        aria-hidden
+        className={`flex-shrink-0 w-3 text-center ${succeeded ? 'text-ember-500/75' : 'text-danger-500/75'}`}
+      >
+        {succeeded ? '✓' : '✗'}
+      </span>
+      <span className="flex-1 text-text-secondary truncate">
+        <span className="text-text-primary">{call.name}</span>
+        {!succeeded && result?.error && (
+          <span className="text-danger-500/80"> — {result.error}</span>
+        )}
+      </span>
+      <span className="flex-shrink-0 text-text-tertiary/70 tabular-nums">
+        {formatMs(call.durationMs)}
+      </span>
     </div>
   )
 }

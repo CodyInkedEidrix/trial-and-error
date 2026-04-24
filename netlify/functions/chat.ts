@@ -71,7 +71,13 @@ const CORS_HEADERS = {
 
 // ─── Constants ───────────────────────────────────────────────────────
 
-const MAX_TOKENS = 2048
+// Max output tokens per Anthropic turn. Bumped 2048 → 4096 after
+// observing plans where the agent tried to emit 10+ tool_use blocks
+// in a single turn (e.g., "create 10 proposals simultaneously" ~=
+// 3000 tokens of JSON). Cost is unchanged when unused — only actual
+// output tokens bill — so raising the ceiling just prevents mid-
+// stream truncation on large parallel batches.
+const MAX_TOKENS = 4096
 /** Hard cap on loop iterations. Sonnet 4.6 tends to serialize tool
  *  calls one-per-iteration unless explicitly pushed to batch, so a
  *  real multi-entity request (e.g., "add 4 customers, create 2-3

@@ -14,19 +14,31 @@
 //
 // Reactions auto-clear via onReactionComplete → store.clearReaction.
 //
-// ─── Eye-as-locus (AC-05 Session 1) ──────────────────────────────────
+// ─── Eye-as-locus ─────────────────────────────────────────────────────
 // An EyeAura layer sits behind the Eye and opacity-pulses whenever work
 // is in flight — either chatStore.isStreaming OR planStore has a
-// running plan. The aura is what replaces the old streaming cursor:
-// the "she's working" signal now lives at the Eye, not above it in an
-// empty bubble. Suppressed under prefers-reduced-motion.
+// running plan. The aura replaces the old streaming cursor: the "she's
+// working" signal lives at the Eye, not above it in an empty bubble.
+//
+// A SigilOverlay mounts to the right of the Eye and renders ephemeral
+// gestures the Eye "conjures" — a spiral at plan start, a checkmark on
+// complete, a halt circle on stop, a fizzling X on fail. Extensible by
+// design: any component can call useSigilStore.fire(kind) to request a
+// gesture (click acknowledgments, system notifications, anything).
+// Both layers are suppressed under prefers-reduced-motion.
 // ──────────────────────────────────────────────────────────────────────
 
 import { motion, useReducedMotion } from 'framer-motion'
 
 import { useChatStore } from '../../lib/chatStore'
 import { usePlanStore } from '../../lib/planStore'
+// Imported for its side-effect: the module subscribes to planStore
+// transitions and fires sigils. Without this import the sigil system
+// is dormant. Kept here (not deeper in SigilOverlay) so removing the
+// overlay doesn't silently kill the dispatch.
+import '../../lib/sigilStore'
 import EidrixEye from '../brand/EidrixEye'
+import SigilOverlay from './SigilOverlay'
 
 const EYE_SIZE_PX = 32
 
@@ -64,6 +76,9 @@ export default function ChatEyeAnchor() {
           onReactionComplete={clearReaction}
         />
       </div>
+      {/* Sigils conjure to the right of the Eye. Absolutely
+          positioned — zero layout impact when idle. */}
+      <SigilOverlay />
     </div>
   )
 }
